@@ -1,6 +1,6 @@
 # Hackathon Autumn 2026 — backend
 
-FastAPI + async SQLAlchemy + PostgreSQL. Подробности по стеку и слоям: [docs/STACK.md](docs/STACK.md).
+FastAPI + async SQLAlchemy + PostgreSQL. Подробности по стеку и слоям: [docs/STACK.md](docs/STACK.md). Работа с ветками в команде: [docs/GIT.md](docs/GIT.md).
 
 ## Быстрый старт
 
