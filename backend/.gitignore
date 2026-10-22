@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Окружение и секреты
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+!.env.shared.example
+
+# Линтеры
+.mypy_cache/
+.ruff_cache/
+
+# IDE и ОС
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log

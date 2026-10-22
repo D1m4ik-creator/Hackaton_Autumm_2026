@@ -1,0 +1,18 @@
+# Web
+fastapi==0.159.1
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+
+# БД
+SQLAlchemy[asyncio]==2.1.6
+asyncpg==0.32.0
+alembic==1.20.1
+
+# Валидация и настройки
+pydantic==2.14.1
+pydantic-settings==2.16.1
+email-validator==2.3.0
+
+# Авторизация
+pwdlib[argon2]==0.3.1
+PyJWT==2.15.1
