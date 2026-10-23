@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../api/client'
+import { AuthLayout } from '../components/AuthLayout'
 
 export function LoginPage() {
   const { login } = useAuth()
@@ -27,35 +28,41 @@ export function LoginPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Вход</h1>
-      <div>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="password">Пароль</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </div>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={isSubmitting}>
-        Войти
-      </button>
-      <p>
-        Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-      </p>
-    </form>
+    <AuthLayout
+      title="С возвращением"
+      subtitle="Войдите, чтобы продолжить"
+      switchHint="Нет аккаунта?"
+      switchLinkLabel="Зарегистрироваться"
+      switchLinkTo="/register"
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="Email *"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="auth-field">
+          <label htmlFor="password">Пароль</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Пароль *"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button type="submit" className="auth-submit" disabled={isSubmitting}>
+          Войти
+        </button>
+      </form>
+    </AuthLayout>
   )
 }

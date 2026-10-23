@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ApiError } from '../api/client'
+import { AuthLayout } from '../components/AuthLayout'
 
 export function RegisterPage() {
   const { register } = useAuth()
@@ -28,48 +29,57 @@ export function RegisterPage() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h1>Регистрация</h1>
-      <div>
-        <label htmlFor="name">Имя</label>
-        <input
-          id="name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          minLength={2}
-          maxLength={50}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="email">Email</label>
-        <input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="password">Пароль</label>
-        <input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <p>Минимум 8 символов: заглавная и строчная буквы, цифра и спецсимвол</p>
-      </div>
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={isSubmitting}>
-        Зарегистрироваться
-      </button>
-      <p>
-        Уже есть аккаунт? <Link to="/login">Войти</Link>
-      </p>
-    </form>
+    <AuthLayout
+      title="Создать аккаунт"
+      subtitle="Укажите данные, чтобы начать"
+      switchHint="Уже есть аккаунт?"
+      switchLinkLabel="Войти"
+      switchLinkTo="/login"
+    >
+      <form onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="name">Имя</label>
+          <input
+            id="name"
+            type="text"
+            placeholder="Имя *"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            minLength={2}
+            maxLength={50}
+            required
+          />
+        </div>
+        <div className="auth-field">
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="Email *"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
+        <div className="auth-field">
+          <label htmlFor="password">Пароль</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Пароль *"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <p className="auth-field__hint">
+            Минимум 8 символов: заглавная и строчная буквы, цифра и спецсимвол
+          </p>
+        </div>
+        {error && <p className="auth-error" role="alert">{error}</p>}
+        <button type="submit" className="auth-submit" disabled={isSubmitting}>
+          Зарегистрироваться
+        </button>
+      </form>
+    </AuthLayout>
   )
 }
