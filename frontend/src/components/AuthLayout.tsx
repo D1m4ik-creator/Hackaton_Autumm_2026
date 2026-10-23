@@ -44,9 +44,9 @@ export function AuthLayout({
         </div>
         <div className="auth-visual__footer">
           <p className="auth-visual__quote">
-            «Это приложение сэкономило нам кучу времени и помогло выкатить результат быстрее.»
+            «Это приложение меня заебало»
           </p>
-          <p className="auth-visual__wordmark">Hackathon.</p>
+          <p className="auth-visual__wordmark">ебанный в рот.</p>
         </div>
       </aside>
 
