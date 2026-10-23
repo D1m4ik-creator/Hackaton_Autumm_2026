@@ -1,31 +1,20 @@
 import type { ReactNode } from 'react'
-import { Link } from 'react-router-dom'
 import { GradientBlinds } from './GradientBlinds'
 import '../styles/auth.css'
 
 interface AuthLayoutProps {
   title: string
   subtitle: string
-  switchHint: string
-  switchLinkLabel: string
-  switchLinkTo: string
   children: ReactNode
 }
 
-export function AuthLayout({
-  title,
-  subtitle,
-  switchHint,
-  switchLinkLabel,
-  switchLinkTo,
-  children,
-}: AuthLayoutProps) {
+export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   return (
     <div className="auth-layout">
       <aside className="auth-visual">
         <div className="auth-visual__bg">
           <GradientBlinds
-            gradientColors={['#050505', '#6b6b6b', '#e8e8e8']}
+            gradientColors={['#120f0c', '#ff7a00', '#ffd9a8']}
             angle={15}
             noise={0.15}
             blindCount={20}
@@ -56,10 +45,6 @@ export function AuthLayout({
           <p className="auth-card__subtitle">{subtitle}</p>
 
           {children}
-
-          <p className="auth-switch">
-            {switchHint} <Link to={switchLinkTo}>{switchLinkLabel}</Link>
-          </p>
         </div>
       </div>
     </div>
