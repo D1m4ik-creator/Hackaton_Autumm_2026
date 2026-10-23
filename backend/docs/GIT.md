@@ -1,80 +1,151 @@
-# Ветки
+# Ветки и как вносить изменения
+
+## Какие ветки есть сейчас
 
 ```
-main
- └─ develop
-     ├─ Dim            личная ветка участника
-     │   ├─ feature/auth
-     │   └─ fix/login-cookie
-     └─ Ivan
-         └─ feature/orders
+main                        стабильная версия, сливает только владелец
+ └─ develope                общая ветка разработки (имя именно с «e» на конце)
+     ├─ Dim                 личная ветка бэка
+     │   └─ feature/..., fix/...    ветки задач от личной
+     └─ front/feature/auth  ветка фронта (задача авторизации)
 ```
 
-`main` -> `develop` -> личная ветка -> ветки задач (фичи, фиксы).
-Слияние идёт обратно по той же цепочке, вверх по одному уровню.
+Путь изменений: ветка задачи -> личная ветка -> `develope` -> `main`.
 
-## Первый раз: создать личную ветку
+## Принципы
+
+- Одна задача = одна ветка. Название говорит, что делаем: `feature/predict-batch`, `fix/zero-division` (латиницей, через дефис). Фронт добавляет префикс `front/`.
+- Начинаем со свежего: перед задачей подтягиваем `develope`, иначе работаем по устаревшему коду.
+- Ветки независимы: пока вы не подтянули `develope`, чужих изменений у вас нет. Подтягивайте почаще.
+- В `develope` и `main` только через Pull Request (PR): в нём видно автора, список изменений и историю.
+- Каждый PR смотрит второй человек и нажимает **Approve**. Нашёл замечание — автор правит в той же ветке новым коммитом, PR обновляется сам, после правок ревьюер смотрит ещё раз.
+- Перед PR проверяем, что проект запускается и наша ручка работает в `/docs`.
+- Коммит небольшой и с понятным описанием: `Исправить деление на ноль`, `Добавить регистрацию пользователя`.
+
+## Перед началом работы: подтянуть свежее
 
 ```bash
-git checkout develop
-git pull origin develop
-git checkout -b Dim
-git push -u origin Dim
+git fetch origin
+git checkout Dim
+git merge origin/develope
 ```
 
 ## Новая задача
 
 ```bash
 git checkout Dim
-git pull origin develop
-git checkout -b feature/auth
+git checkout -b feature/название
 ```
 
-## Коммит и пуш
+Для фронта: `git checkout -b front/feature/название`.
+
+## Внести изменения (коммит и пуш)
 
 ```bash
+git status
 git add -A
-git commit -m "add auth"
-git push -u origin feature/auth
+git commit -m "Добавить регистрацию пользователя"
+git push -u origin feature/название
 ```
+
+Дальше `git push` без параметров.
 
 ## Задача готова: влить в личную ветку
 
 ```bash
 git checkout Dim
-git merge feature/auth
+git merge feature/название
 git push origin Dim
-git branch -d feature/auth
+git branch -d feature/название
+git push origin --delete feature/название
 ```
 
-## Личная ветка готова: влить в develop
+## Личная ветка готова: Pull Request в develope
 
-Подтянуть свежую develop и разобрать конфликты у себя:
+Сначала подтянуть свежую `develope` в свою ветку, решить конфликты у себя и запушить:
 
 ```bash
 git checkout Dim
-git pull origin develop
+git fetch origin
+git merge origin/develope
 git push origin Dim
 ```
 
-Затем Pull Request `Dim` -> `develop`, апрув от напарника.
+Pull Request (PR) нужен, чтобы **другой участник проверил** код до слияния. Свой PR автор сам не одобряет.
 
-## Забрать чужие изменения из develop
+### Автор: создать PR на github.com
+
+1. Открыть репозиторий на сайте. После пуша сверху может появиться жёлтая плашка с кнопкой **Compare & pull request**, её можно нажать. Если плашки нет, идти дальше.
+2. Верхнее меню репозитория: вкладка **Pull requests** -> зелёная кнопка **New pull request**.
+3. Выбрать ветки: **base: `develope`** (куда вливаем), **compare: `Dim`** (что вливаем). Стрелка между ними показывает направление, base слева.
+4. Нажать **Create pull request**.
+5. В открывшейся форме написать заголовок (коротко, что сделано) и описание (что изменилось, как проверить).
+6. Справа в блоке **Reviewers** нажать на шестерёнку и выбрать напарника. Если его нет в списке, он ещё не принял приглашение в репозиторий (Settings -> Collaborators).
+7. Нажать зелёную **Create pull request** ещё раз.
+
+### Ревьюер: проверить и одобрить
+
+1. Придёт уведомление (колокольчик справа вверху или почта). Либо: **Pull requests** -> открыть нужный PR.
+2. Вкладка **Files changed**: изменения по файлам, зелёное добавлено, красное удалено.
+3. Комментарий к строке: навести на номер строки, нажать синий **+**, написать текст, **Start a review**.
+4. Закончить проверку: справа вверху **Review changes**, выбрать один вариант и нажать **Submit review**:
+   - **Approve** — всё хорошо, можно сливать;
+   - **Request changes** — нужно исправить, слить нельзя;
+   - **Comment** — просто комментарии без решения.
+5. Хотите запустить код автора у себя:
+
+```bash
+git fetch origin
+git checkout Dim
+git pull origin Dim
+```
+
+### Автор: слить после Approve
+
+1. Открыть PR, прокрутить вниз до блока слияния.
+2. Нажать **Merge pull request** -> **Confirm merge**. Способ слияния оставить обычный (**Create a merge commit**).
+3. Кнопку **Delete branch** для личной ветки `Dim` **не нажимать**: она живёт дальше. Для веток задач (`feature/...`) удалять можно.
+
+Squash для личной ветки не использовать: после него история `Dim` расходится с `develope`, и следующие слияния дают лишние конфликты.
+
+## Ревьюер оставил замечания
+
+Правим в своей ветке и пушим, PR обновится сам:
 
 ```bash
 git checkout Dim
-git pull origin develop
+# ... правки ...
+git add -A
+git commit -m "Исправить замечания ревью"
+git push origin Dim
 ```
 
-## Develop в main (перед демо, один человек)
+Потом в PR написать ревьюеру, что исправлено, чтобы он посмотрел ещё раз.
 
-Pull Request `develop` -> `main`.
+## develope в main (перед демо, только владелец)
 
-## Полезное
+1. **Pull requests** -> **New pull request**.
+2. **base: `main`**, **compare: `develope`** -> **Create pull request** -> заголовок -> **Create pull request**.
+3. Напарник проверяет и нажимает **Approve**.
+4. Владелец нажимает **Merge pull request** -> **Confirm merge**. Ветку `develope` не удалять.
+
+## Если что-то пошло не так
 
 ```bash
-git branch                  # список веток, * текущая
+git branch                  # на какой ветке я
 git status                  # что изменено
 git log --oneline -10       # последние коммиты
-git branch -d feature/auth  # удалить влитую ветку
+git merge --abort           # отменить слияние с конфликтами
+git stash                   # спрятать правки, чтобы переключить ветку
+git stash pop               # вернуть спрятанные правки
 ```
+
+Если открылся vim при слиянии: `Esc`, затем `:wq` и `Enter`.
+
+## Не делаем
+
+- Не пушим в `main` и `develope` напрямую.
+- Не коммитим `.env` и `.env.shared`.
+- Не делаем `git push --force`.
+- Не работаем в `main` и `develope`: всегда в своей ветке.
+- Не сливаем свой PR без Approve напарника.
