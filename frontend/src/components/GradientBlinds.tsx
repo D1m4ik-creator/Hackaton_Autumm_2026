@@ -78,11 +78,20 @@ export function GradientBlinds({
     const container = containerRef.current
     if (!container) return
 
-    const renderer = new Renderer({
-      dpr: dpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1),
-      alpha: true,
-      antialias: true,
-    })
+    let renderer: Renderer
+    try {
+      renderer = new Renderer({
+        dpr: dpr ?? (typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1),
+        alpha: true,
+        antialias: true,
+      })
+    } catch (err) {
+      // WebGL недоступен или исчерпан лимит контекстов в этой вкладке —
+      // оставляем панель пустой (фон задаётся через CSS на обёртке) вместо
+      // падения всего дерева.
+      console.error('GradientBlinds: failed to create a WebGL context', err)
+      return
+    }
     rendererRef.current = renderer
     const gl = renderer.gl
     const canvas = gl.canvas
@@ -357,6 +366,11 @@ void main() {
       if (canvas.parentElement === container) {
         container.removeChild(canvas)
       }
+      // Без явного освобождения контекста браузер держит его живым даже
+      // после удаления canvas из DOM — за несколько HMR-перезагрузок это
+      // упирается в лимит WebGL-контекстов (обычно 8-16 на вкладку), и
+      // следующий `getContext` начинает возвращать null.
+      gl.getExtension('WEBGL_lose_context')?.loseContext()
       programRef.current = null
       geometryRef.current = null
       meshRef.current = null
