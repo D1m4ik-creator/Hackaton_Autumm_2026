@@ -1,22 +1,9 @@
 import { request } from './client'
 import type { User } from '../types/user'
 
-export interface RegisterPayload {
-  name: string
-  email: string
-  password: string
-}
-
 export interface LoginPayload {
   email: string
   password: string
-}
-
-export function register(payload: RegisterPayload): Promise<{ id: string; email: string }> {
-  return request('/auth/create_user/', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  })
 }
 
 export function login(payload: LoginPayload): Promise<{ message: string }> {

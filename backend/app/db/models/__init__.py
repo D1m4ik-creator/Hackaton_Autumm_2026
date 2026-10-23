@@ -1,6 +1,6 @@
 from .base import Base
-from .users import User
+from .sessions import AuthSession
 
 # Новые модели импортировать сюда, чтобы Alembic их видел
 
-__all__ = ["Base", "User"]
+__all__ = ["Base", "AuthSession"]
