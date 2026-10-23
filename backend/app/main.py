@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import get_settings
 from app.core.engine import close_engine
-from app.routers import auth, health, users
+from app.routers import auth, health
 
 
 @asynccontextmanager
@@ -15,7 +15,16 @@ async def lifespan(app: FastAPI):
     await close_engine() # Закрытие движка при завершении работы приложения
 
 
-app = FastAPI(title="Hackathon API", description="Backend для хакатона Autumn 2026", lifespan=lifespan)
+API_PREFIX = "/api/v1"
+
+app = FastAPI(
+    title="Hackathon API",
+    description="Backend для хакатона Autumn 2026",
+    lifespan=lifespan,
+    docs_url=f"{API_PREFIX}/docs",
+    openapi_url=f"{API_PREFIX}/openapi.json",
+    redoc_url=None,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,6 +34,5 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router)
-app.include_router(auth.router)
-app.include_router(users.router)
+app.include_router(health.router, prefix=API_PREFIX)
+app.include_router(auth.router, prefix=API_PREFIX)
