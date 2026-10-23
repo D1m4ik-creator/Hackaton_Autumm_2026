@@ -9,7 +9,6 @@
 | ORM | SQLAlchemy 2.0 async + asyncpg | модели `Mapped[...]`, асинхронные запросы |
 | Миграции | Alembic (async env) | схема БД под контролем |
 | Валидация и конфиг | pydantic v2, pydantic-settings | схемы запросов/ответов, настройки из `.env` |
-| Пароли | pwdlib[argon2] | хэширование (вместо устаревшего passlib) |
 | JWT | PyJWT | токены (вместо устаревшего python-jose) |
 
 ## Слои (`app/`)
@@ -18,7 +17,7 @@
 main.py          приложение, CORS, подключение роутеров, lifespan
 core/config.py   настройки из .env (get_settings)
 core/engine.py   engine, сессия, SessionDep
-core/security.py (добавим с авторизацией) хэш паролей, JWT
+core/security.py проверка логина и пароля из .env, JWT
 db/models/       модели SQLAlchemy; Base в base.py; новые модели импортировать в __init__.py
 db/schemas/      pydantic-схемы
 db/migration/    Alembic
@@ -46,3 +45,21 @@ routers/         тонкие эндпоинты
 - Поля `Config` называются так же, как переменные в `.env` (регистр не важен).
 - Секреты только в `.env` (в git не попадает), образец в `.env.example`.
 
+## Авторизация
+
+Регистрации нет. Учётная запись одна, задаётся в `.env` (`ADMIN_LOGIN`, `ADMIN_PASSWORD`). Сессия живёт в браузере в двух httpOnly cookie: `users_access_token` (15 минут) и `users_refresh_token` (30 дней). В таблице `auth_sessions` хранится хэш актуального refresh-токена каждой сессии (одна запись на браузер).
+
+| Ручка | Что делает |
+|---|---|
+| `POST /api/v1/auth/login` | вход (`{"login": "...", "password": "..."}`), создаёт сессию и ставит обе cookie |
+| `POST /api/v1/auth/refresh` | новая пара токенов по refresh-cookie; старый refresh больше не действует |
+| `GET /api/v1/auth/me` | текущий пользователь (`{"login": "..."}`) |
+| `POST /api/v1/auth/logout` | удаляет сессию из БД и cookie |
+
+Замена refresh атомарная. Если тот же старый токен пришёл повторно в течение `JWT_REFRESH_GRACE_SECONDS` (30 секунд) после замены, это параллельный запрос из того же браузера: он получает только новый access. Если давно заменённый токен пришёл позже (например, украденный), сессия закрывается целиком. Просроченные сессии удаляются при каждом входе. После `logout` access-токен живёт до истечения (до 15 минут).
+
+На деплое с HTTPS включить `COOKIE_SECURE=true`.
+
+Защитить свою ручку: `current_user = Depends(crud_auth.get_current_user)`. Фронту: `fetch(..., { credentials: "include" })`, адрес фронта в `CORS_ORIGINS`. Swagger: `/api/v1/docs`.
+
+Локальная база в Docker слушает порт `5433` (5432 часто занят установленным в Windows PostgreSQL).

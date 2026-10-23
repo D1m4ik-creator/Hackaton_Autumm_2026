@@ -1,0 +1,14 @@
+# AI agent / assistant folders
+.claude/
+.cursor/
+.windsurf/
+.github/copilot/
+.aider*
+.codeium/
+.continue/
+.copilot/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
