@@ -1,5 +1,6 @@
 from .base import Base
 from .sessions import AuthSession
+from .users import User
 from .account import Account
 from .service import Service
 from .transaction import Transaction
@@ -12,6 +13,7 @@ from .risk_summary import RiskSummary
 __all__ = [
     "Base",
     "AuthSession",
+    "User",
     "Account",
     "Service",
     "Transaction",

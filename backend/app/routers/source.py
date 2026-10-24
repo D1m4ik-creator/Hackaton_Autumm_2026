@@ -8,7 +8,7 @@ from app.db.schemas.source import SnapshotIn, SnapshotLoadResult
 router = APIRouter(
     prefix="/source",
     tags=["source"],
-    dependencies=[Depends(crud_auth.get_current_user)],
+    dependencies=[Depends(crud_auth.require_admin)],
 )
 
 

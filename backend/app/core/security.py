@@ -5,8 +5,13 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 from fastapi import HTTPException, Request, status
+from pwdlib import PasswordHash
 
 from .config import get_settings
+
+password_hash = PasswordHash.recommended()
+# Хэш-пустышка: вход несуществующего пользователя занимает столько же времени, сколько обычный
+DUMMY_HASH = password_hash.hash("dummy-password-for-timing")
 
 ACCESS_COOKIE = "users_access_token"
 REFRESH_COOKIE = "users_refresh_token"
@@ -21,6 +26,16 @@ def verify_credentials(login: str, password: str) -> bool:
     login_ok = secrets.compare_digest(login.encode(), admin.login.encode())
     password_ok = secrets.compare_digest(password.encode(), admin.password.get_secret_value().encode())
     return login_ok and password_ok
+
+
+def get_password_hash(password: str) -> str:
+    """Хэширует пароль (argon2)"""
+    return password_hash.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Проверяет, что введённый пароль соответствует хэшу"""
+    return password_hash.verify(plain_password, hashed_password)
 
 
 def hash_token(token: str) -> str:

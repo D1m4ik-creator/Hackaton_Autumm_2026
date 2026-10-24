@@ -28,8 +28,16 @@ docker compose up -d --build
 
 ## Вход
 
-Учётная запись одна, задаётся в `.env` (`ADMIN_LOGIN` / `ADMIN_PASSWORD`,
-по умолчанию `admin` / `admin12345`). Сессия — две httpOnly cookie, их ставит
+Две роли:
+
+- **Администратор** — один, задаётся в `.env` (`ADMIN_LOGIN` / `ADMIN_PASSWORD`,
+  по умолчанию `admin` / `admin12345`). Создаёт менеджеров и управляет ими
+  (`/api/v1/users`), меняет настройки модели и загружает снимок данных.
+- **Менеджер** — учётную запись (логин, почта, пароль) создаёт администратор и
+  передаёт менеджеру. Входит по логину или почте, видит клиентов, карточки,
+  сводку и настройки модели (только просмотр). Остальное — `403`.
+
+Сессия — две httpOnly cookie, их ставит
 `POST /api/v1/auth/login`. В Swagger: выполнить `auth/login` с телом
 `{"login": "admin", "password": "admin12345"}` — cookie сохранятся в браузере,
 остальные ручки станут доступны.
@@ -46,9 +54,10 @@ docker compose up -d --build
 | `GET /api/v1/customers/{customerId}` | карточка клиента: причины, услуги, транзакции |
 | `GET /api/v1/analytics/summary` | сводка: клиенты по уровням, ожидаемые потери, версия |
 | `GET /api/v1/model/settings` | эффективные настройки модели + дефолты |
-| `PATCH /api/v1/model/settings` | частично поменять настройки (deep-merge) и пересчитать |
-| `PUT /api/v1/source/snapshot` | загрузить свой снимок и пересчитать |
+| `PATCH /api/v1/model/settings` | частично поменять настройки (deep-merge) и пересчитать; только администратор |
+| `PUT /api/v1/source/snapshot` | загрузить свой снимок и пересчитать; только администратор |
 | `GET /api/v1/events` | живое обновление (SSE) |
+| `GET`/`POST /api/v1/users`, `PATCH`/`DELETE /api/v1/users/{userId}` | менеджеры: список, создание (логин, почта, пароль), изменение, удаление; только администратор |
 | `GET /api/v1/health` | проверка живости API и базы (без входа) |
 | `GET /metrics` | метрики Prometheus (без входа) |
 
@@ -93,24 +102,6 @@ docker compose up -d db         # только база (порт 5433)
 alembic upgrade head
 uvicorn app.main:app --reload   # http://localhost:8000/api/v1/docs
 ```
-
-## Две базы: локальная и общая (Supabase)
-
-- **Локальная** (Docker, для экспериментов): `.env` — читается по умолчанию.
-- **Общая** (Supabase, одна на команду): `.env.shared` (образец — `.env.shared.example`),
-  включается переменной `ENV_FILE`.
-
-```powershell
-$env:ENV_FILE = ".env.shared"
-alembic upgrade head
-uvicorn app.main:app --reload
-Remove-Item Env:ENV_FILE        # вернуться на локальную
-```
-
-Правила общей базы: `alembic upgrade head` запускает один человек по
-договорённости, `downgrade` — только по согласованию; схему экспериментировать
-только на локальной; строка подключения — Session pooler (порт 5432), не
-Transaction pooler (6543); в Supabase включить RLS или отключить Data API.
 
 ## Команды
 

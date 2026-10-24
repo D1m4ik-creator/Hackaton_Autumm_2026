@@ -19,11 +19,12 @@ os.environ.setdefault("POSTGRES_PASSWORD", "change_me")
 os.environ.setdefault("POSTGRES_DB", "hackathon_test")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5433")
-os.environ.setdefault("POSTGRES_SSL", "false")
 os.environ.setdefault("JWT_SECRET_KEY", "0" * 64)
 os.environ.setdefault("JWT_REFRESH_SECRET_KEY", "1" * 64)
 os.environ.setdefault("ADMIN_LOGIN", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "test_password")
+# Лимиты на вход мешают тестам, где логинятся много раз; их проверяет отдельный тест
+os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402
@@ -32,7 +33,7 @@ from sqlalchemy import delete  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.engine import SessionLocal, engine  # noqa: E402
-from app.db.models import AuthSession, Base  # noqa: E402
+from app.db.models import AuthSession, Base, ModelSettings, RiskSummary, User  # noqa: E402
 from app.main import app  # noqa: E402
 
 
@@ -74,6 +75,10 @@ async def _setup_database():
     await _recreate_test_database()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Одиночные строки, которые в рабочей базе создаёт миграция
+    async with SessionLocal() as session:
+        session.add_all([ModelSettings(id=1), RiskSummary(id=1)])
+        await session.commit()
     yield
     # Сначала закрываем соединения пула, иначе база не удалится
     await engine.dispose()
@@ -82,9 +87,10 @@ async def _setup_database():
 
 @pytest.fixture
 async def db_session():
-    """Чистая сессия БД; таблица сессий очищается перед каждым тестом."""
+    """Чистая сессия БД; таблицы сессий и менеджеров очищаются перед каждым тестом."""
     async with SessionLocal() as session:
         await session.execute(delete(AuthSession))
+        await session.execute(delete(User))
         await session.commit()
         yield session
 

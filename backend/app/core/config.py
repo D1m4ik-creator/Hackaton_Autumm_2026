@@ -1,4 +1,3 @@
-import os
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -17,12 +16,10 @@ class DatabaseConfig(BaseModel):
     host: str
     port: int
     echo: bool = False
-    ssl: bool = False
 
     def get_db_url(self) -> str:
         encoded_password = quote_plus(self.password.get_secret_value())
-        url = f"postgresql+asyncpg://{self.user}:{encoded_password}@{self.host}:{self.port}/{self.db}"
-        return f"{url}?ssl=require" if self.ssl else url
+        return f"postgresql+asyncpg://{self.user}:{encoded_password}@{self.host}:{self.port}/{self.db}"
 
 
 class JWTConfig(BaseModel):
@@ -41,8 +38,7 @@ class AdminConfig(BaseModel):
 
 class Config(BaseSettings):
     model_config = SettingsConfigDict(
-        # Какой env-файл читать: по умолчанию .env (локальная база), ENV_FILE=.env.shared для общей
-        env_file=str(ROOT_DIR / os.getenv("ENV_FILE", ".env")),
+        env_file=str(ROOT_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -52,7 +48,6 @@ class Config(BaseSettings):
     postgres_db: str
     postgres_host: str
     postgres_port: int = 5432
-    postgres_ssl: bool = False
 
     jwt_secret_key: SecretStr = Field(min_length=32)
     jwt_refresh_secret_key: SecretStr = Field(min_length=32)
@@ -64,6 +59,11 @@ class Config(BaseSettings):
 
     # True на деплое с HTTPS: cookie уходят только по защищённому соединению
     cookie_secure: bool = False
+
+    # Лимиты запросов с одного IP (формат slowapi: «5/minute»)
+    rate_limit_enabled: bool = True
+    rate_limit_login: str = "5/minute"
+    rate_limit_refresh: str = "30/minute"
 
     # Единственная учётная запись для входа в панель
     admin_login: str
@@ -90,7 +90,6 @@ class Config(BaseSettings):
             host=self.postgres_host,
             port=self.postgres_port,
             echo=self.database_echo,
-            ssl=self.postgres_ssl,
         )
 
     @property
