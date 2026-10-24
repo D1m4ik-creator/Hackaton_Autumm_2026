@@ -64,7 +64,7 @@ async def test_me_after_login(client: AsyncClient):
     response = await client.get("/api/v1/auth/me")
 
     assert response.status_code == 200
-    assert response.json() == {"login": "admin", "role": "admin", "email": None}
+    assert response.json() == {"login": "admin", "role": "superadmin", "email": None}
 
 
 async def test_refresh_without_cookie(client: AsyncClient):
