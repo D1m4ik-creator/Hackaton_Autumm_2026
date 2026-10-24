@@ -11,6 +11,7 @@ export interface ClientService {
   status: string
   priceCents: number
   period: string
+  createdAt: string
   expiresAt: string
   autoProlong: boolean
 }

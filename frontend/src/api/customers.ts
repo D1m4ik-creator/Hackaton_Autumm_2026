@@ -55,7 +55,7 @@ export async function getCustomer(id: string): Promise<ClientDetail> {
     reasons: result.reasons.map((reason, index) => ({ id: `${reason.code}-${index}`, title: reason.text })),
     services: result.services.map((service) => ({
       id: String(service.id), name: service.name, status: service.status, priceCents: service.price,
-      period: service.paymentTerm, autoProlong: service.autoProlong, expiresAt: service.expiresAt,
+      period: service.paymentTerm, autoProlong: service.autoProlong, createdAt: service.createdAt, expiresAt: service.expiresAt,
     })),
     transactions: result.transactions, calculatedAt: result.calculatedAt, asOf: result.asOf,
     withdrawBalanceCents: result.withdrawBalance, bonusBalanceCents: result.bonusBalance,

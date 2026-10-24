@@ -35,6 +35,8 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     lossExplanation: 'Ожидаемые потери с учётом вероятности оттока и покрытия балансом',
     onSettingsSaved: null as (() => void) | null,
     settings: { asOf: null } as Record<string, unknown>,
+    cardCalculatedAt: timestamp as string | null,
+    cardServices: [{ id: 1, name: 'VPS Test', status: 'active', price: 1299, autoProlong: false, paymentTerm: 'week', createdAt: timestamp, expiresAt: timestamp }],
     managers: [{ id: managerId, login: 'manager1', email: 'manager1@example.com', role: 'manager', createdAt: timestamp }],
     requests: [] as { path: string; method: string; body: unknown }[],
     customers: Array.from({ length: 55 }, (_, index) => ({
@@ -134,8 +136,8 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
         reasons: customer.level === 'no_data'
           ? [{ code: 'model_not_connected', text: 'Модель анализа ещё не подключена' }]
           : [{ code: 'auto_prolong', text: customer.reasonShort }], details: {},
-        services: [{ id: 1, name: 'VPS Test', status: 'active', price: 1299, autoProlong: false, paymentTerm: 'week', createdAt: timestamp, expiresAt: timestamp }],
-        transactions: { total: 5, performed: 3, notPerformed: 2 }, asOf: timestamp, calculatedAt: timestamp,
+        services: state.cardServices,
+        transactions: { total: 5, performed: 3, notPerformed: 2 }, asOf: timestamp, calculatedAt: state.cardCalculatedAt,
       })
     }
     if (path === '/model/settings') {
@@ -309,7 +311,7 @@ test('dashboard risk card opens a filtered list without a StrictMode reset', asy
   expect(levels.slice(start).every((level) => level === 'high')).toBe(true)
 })
 
-test('customer card renders real reasons, transactions and prices and refreshes over SSE', async ({ page }) => {
+test('customer card restores the activity timeline and refreshes real data over SSE', async ({ page }) => {
   const api = await setupApi(page)
   await page.goto('/app/clients/1')
   await expect(page.getByRole('heading', { name: 'Клиент #1' })).toBeVisible()
@@ -317,13 +319,48 @@ test('customer card renders real reasons, transactions and prices and refreshes 
   await expect(page.locator('.client-profile__risk')).toHaveText('нет оценки')
   await expect(page.locator('.client-profile__stats')).toContainText('€123.45')
   await expect(page.locator('.client-services__price')).toContainText('€12.99 / нед')
+  const activity = page.getByRole('region', { name: 'Активность', exact: true })
+  await expect(activity.getByRole('listitem')).toHaveCount(2)
+  await expect(activity.locator('.client-activity__description')).toHaveText([
+    'Обновлена оценка риска клиента', 'Создана услуга «VPS Test»',
+  ])
+  await expect(activity.locator('.client-activity__item--highlighted')).toHaveCount(1)
   const calls = api.cardCalls
   api.customers[0].balance = 999
+  api.cardServices[0].name = 'VPS Updated'
   await emit(page)
   await expect(page.locator('.client-profile__stats')).toContainText('€9.99')
+  await expect(activity).toContainText('Создана услуга «VPS Updated»')
   expect(api.cardCalls).toBeGreaterThan(calls)
   await page.goto('/app/clients/999')
   await expect(page.getByRole('main').getByText('Клиент не найден', { exact: true })).toBeVisible()
+})
+
+test('activity shows the four latest dated events in the original timeline', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-10-24T18:00:00Z'))
+  const api = await setupApi(page)
+  const service = api.cardServices[0]
+  api.cardServices = [19, 22, 20, 21].map((day) => ({
+    ...service, id: day, name: `VPS ${day}`, createdAt: `2026-10-${day}T12:00:00Z`,
+  }))
+  await page.goto('/app/clients/1')
+  const activity = page.getByRole('region', { name: 'Активность', exact: true })
+  await expect(activity.locator('.client-activity__description')).toHaveText([
+    'Обновлена оценка риска клиента', 'Создана услуга «VPS 22»',
+    'Создана услуга «VPS 21»', 'Создана услуга «VPS 20»',
+  ])
+  await expect(activity.locator('.client-activity__time').first()).toContainText('Сегодня,')
+  await expect(activity.locator('.client-activity__time').nth(1)).toHaveText('2 дня назад')
+})
+
+test('activity does not invent events when the customer has no activity data', async ({ page }) => {
+  const api = await setupApi(page)
+  api.cardCalculatedAt = null
+  api.cardServices = []
+  await page.goto('/app/clients/1')
+  const activity = page.getByRole('region', { name: 'Активность', exact: true })
+  await expect(activity.getByRole('listitem')).toHaveCount(0)
+  await expect(activity).toContainText('Нет событий активности')
 })
 
 test('settings sliders load from API, save edits and preserve drafts across SSE', async ({ page }) => {
