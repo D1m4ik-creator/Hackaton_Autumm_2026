@@ -1,32 +1,83 @@
-# React + TypeScript + Vite
+# RETAIN — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19, TypeScript, Vite, Ant Design 6 и Zustand 5.
 
-Currently, two official plugins are available:
+## Запуск
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm.cmd install
+npm.cmd run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Dashboard с моковыми данными: **http://127.0.0.1:5173/dashboard**. Бэкенд для него не нужен; запросы авторизации на этом маршруте не выполняются.
+
+Top Clients at Risk: **http://127.0.0.1:5173/clients**. Страница всегда использует светлую тему; сохранённая тема Dashboard при переходе обратно восстанавливается. Переход доступен из бокового меню и через «Все →» на Dashboard.
+
+Client Detail: **http://127.0.0.1:5173/clients/10432** — Иван Петров из макета. Для остальных клиентов используется `/clients/:clientId`, где `clientId` — числовой ID аккаунта. В авторизованной части доступны аналогичные маршруты `/app/clients/:clientId`. Кнопка справа от ссылки возврата переключает светлую и тёмную темы.
+
+Model Settings: **http://127.0.0.1:5173/model-settings**, после входа — `/app/model-settings`. Пункт «Настройка модели» в меню открывает эту страницу. Используется светлая тема по макету.
+
+`/login` использует существующий API из `VITE_API_URL`. Регистрация удалена в `develope`. После входа `/` показывает Dashboard, а `/app/clients` — клиентов под риском; обе страницы поддерживают настоящий выход из сессии.
+
+## Макет и поведение
+
+Реализованы фреймы [Dashboard (Bento, Light), 22:425](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=22-425) и [Dashboard (Bento), 21:284](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=21-284). Воспроизведены сетка 1440 × 900, боковая панель, карточки, кольцевые индикаторы, график и Inter. На планшетах используется сетка в две колонки, на телефонах навигация открывается в Drawer.
+
+Кнопка справа от заголовка переключает светлую и тёмную темы, включая панели, таблицу, выпадающие списки и модальные окна Ant Design. По умолчанию включена светлая тема. Выбор общий для Dashboard и Client Detail, сохраняется в localStorage (`retain-theme`) через Zustand persist и восстанавливается при перезагрузке. Страница авторизации и Top Clients at Risk используют светлую тему независимо от этого выбора.
+
+Моковый снимок фиксирован на 24 октября 2026 года. Подпись об обновлении в реальном времени сохранена из макета; сетевого обновления и расчёта модели в этой версии нет. Сводка всей базы: 1 284 клиента, 187 с высоким риском, 402 со средним, 695 с низким, €48 920 потенциальных потерь за 30 дней.
+
+- «Все» и пункт «Клиенты под риском» открывают отдельную страницу Top Clients at Risk. Индикаторы риска Dashboard открывают отфильтрованный список в боковой панели.
+- Поиск по имени/email, фильтр риска, сортировка таблицы и просмотр данных клиента работают локально.
+- Период графика переключается между 7 и 30 днями. Как в Figma, недельная серия содержит 8 наблюдений, включая обе границы интервала.
+- «Метрики /metrics» показывает локальный снимок метрик. «Настройка модели» открывает форму весов и порогов.
+
+Top Clients at Risk соответствует [фрейму 21:90](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=21-90): восемь моковых клиентов, фильтры по уровню риска и сортировка по ID, клиенту/email, балансу, пополнениям и risk-score. Баланс и пополнения хранятся в евроцентах. Нажатие на строку или имя открывает Client Detail. На узких экранах таблица прокручивается внутри карточки. Сводные 1 284 клиента в подписи относятся к общей базе из макета, а не к числу моковых строк.
+
+Client Detail соответствует видимым элементам [светлого фрейма 21:166](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=21-166): профиль с аватаром и сводкой, активность, причины риска и услуги. При 1440 × 900 карточки имеют размеры 660 × 260, 400 × 260, 660 × 480 и 400 × 480 с промежутками 24 и 32 px. Для Ивана сохранены тексты макета, score 82 и вклады причин 42/28/18/12%. Для других клиентов используются связанные с их аккаунтом моковые данные. Из Dashboard также можно открыть Client Detail, а ссылка «Все клиенты под риском» возвращает к таблице с сохранёнными фильтрами и сортировкой. Неизвестный ID показывает состояние «Клиент не найден».
+
+Тёмная Client Detail соответствует [фрейму 36:571](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=36-571): тёплый фон, профиль с тонкой нейтральной рамкой, янтарная карточка активности и отдельные цвета статусов и полос причин риска. Размеры и позиции карточек сохраняются при переключении тем; на мобильном экране кнопка переносится в поток над карточками.
+
+Model Settings соответствует [фрейму 21:222](https://www.figma.com/design/3xy5Ux8EDSVhfN9C6RQ1EE/Untitled?node-id=21-222): карточки 700 × 600 и 360 × 360, четыре веса 0.42/0.28/0.18/0.12, пороги 70 и 35. Ползунки и числовые поля синхронизированы, «Добавить признак» открывает диалог с названием и весом. Проверяются диапазоны значений, сумма весов 1.00 и условие `medium < high`. Сохраняется только подтверждённая конфигурация через Zustand persist в localStorage (`retain-model-settings`); черновик остаётся в памяти до перезагрузки. Сохранённые значения восстанавливаются после перезапуска. Поля и диалог доступны с клавиатуры, на мобильном экране карточки располагаются в одну колонку.
+
+В Model Settings сохранена подпись о пересчёте из макета. Подключение к API настроек, реестр расчётных признаков и пересчёт risk-score ещё не реализованы: изменение конфигурации пока не меняет моковые результаты остальных страниц. Поэтому подпись под кнопкой честно указывает локальное сохранение вместо БД.
+
+## FSD
+
+```text
+src/
+  app/                         # маршруты, UI-провайдер, глобальные стили
+  pages/dashboard/             # композиция Dashboard
+  pages/top-clients/           # композиция Top Clients at Risk
+  pages/client-detail/         # композиция Client Detail
+  pages/model-settings/        # композиция Model Settings
+  widgets/
+    dashboard-shell/           # навигация и адаптивная оболочка
+    risk-summary/              # сводка и уровни риска
+    priority-clients/          # клиенты на Dashboard
+    risk-trend/                # динамика по дням
+    client-risk-table/         # таблица клиентов под риском
+    client-profile/            # профиль и сводка клиента
+    client-activity/           # лента активности
+    client-risk-reasons/       # причины и их вклад в риск
+    client-services/           # услуги клиента
+  features/explore-clients/    # поиск, фильтры, список и данные клиента
+  features/switch-theme/       # кнопка переключения темы
+  features/filter-clients/     # фильтры риска и сортировка таблицы
+  features/edit-model-settings/ # форма, добавление признака и сохранение
+  entities/
+    client/                    # типы, фикстуры, бейдж риска
+    risk-report/               # типы, моковые серии и Zustand
+    model-settings/            # типы, значения по умолчанию, валидация
+  shared/                     # тема Ant Design, форматирование, BentoCard
+```
+
+Импорты идут в нижележащие слои через публичные `index.ts` слайсов. Zustand в `entities/risk-report` управляет снимком и периодом; `features/explore-clients` хранит поиск, фильтр и открытого клиента; `features/filter-clients` — фильтр и сортировку отдельной таблицы. Эти состояния не сохраняются между перезагрузками. `shared/lib/theme` хранит и сохраняет тему для UI-провайдера и переключателя. Старые файлы авторизации в `context`, `api`, `components` и `pages` сохранены без миграции в рамках Dashboard.
+
+## Проверка
+
+```powershell
+npm.cmd run build
+```
+
+Браузерные тесты пока отложены по запросу пользователя. Подготовленные файлы находятся в `tests/` и `playwright.config.ts`.
