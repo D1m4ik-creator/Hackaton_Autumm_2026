@@ -30,7 +30,7 @@ services:
     volumes:
       - ./origin_data:/data:ro
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -40,14 +40,12 @@ services:
     build:
       context: ./frontend
       args:
-        # Адрес API подставляется в сборку фронта на этапе build
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        VITE_API_URL: ${VITE_API_URL:-https://full-stack-hack.ru}
     ports:
       - "80:80"
-    depends_on:
-      - api
-    restart: unless-stopped
-
+      - "443:443"
+    volumes:
+      - ./frontend/certs:/etc/nginx/certs:ro
   # --- Authentik: отдельный OIDC-провайдер для входа в панель (backend/app/routers/oidc.py) ---
   # Своя БД и Redis, изолированные от основного Postgres — наружу не публикуются,
   # поэтому фиксированные учётные данные ниже не секрет (виден только внутри сети compose).
