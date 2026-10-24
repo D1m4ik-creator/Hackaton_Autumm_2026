@@ -56,6 +56,27 @@ async def acquire_lock(session: AsyncSession) -> None:
     )
 
 
+# Ключ в сохранённых настройках: список удалённых пунктов вида «секция.ключ».
+# Нужен, потому что эффективные настройки = дефолты + сохранённое, и без него дефолтный пункт возвращался бы после удаления
+REMOVED_KEY = "_removed"
+
+
+def split_stored(stored: dict) -> tuple[dict, list[str]]:
+    """Делит сохранённые настройки на сами настройки и список удалённых пунктов"""
+    data = dict(stored)
+    removed = [p for p in data.pop(REMOVED_KEY, []) if isinstance(p, str)]
+    return data, removed
+
+
+def apply_removals(settings: dict, removed: list[str]) -> dict:
+    """Убирает из настроек удалённые пункты «секция.ключ» (если секции или ключа уже нет, ничего не делает)"""
+    for path in removed:
+        section, _, key = path.partition(".")
+        if isinstance(settings.get(section), dict):
+            settings[section] = {k: v for k, v in settings[section].items() if k != key}
+    return settings
+
+
 def deep_merge(base: dict, override: dict) -> dict:
     """Рекурсивно сливает словари; не-словарные значения заменяются целиком (§6.2)"""
     result = dict(base)
@@ -73,8 +94,8 @@ async def effective_settings(session: AsyncSession) -> dict:
     Если сохранённое после обновления модели не проходит validate_settings —
     предупреждение в лог и возврат к дефолтам (строка в БД не трогается).
     """
-    stored = await ModelSettingsDAO.get(session)
-    merged = deep_merge(analysis.default_settings(), stored)
+    data, removed = split_stored(await ModelSettingsDAO.get(session))
+    merged = apply_removals(deep_merge(analysis.default_settings(), data), removed)
     try:
         return analysis.validate_settings(merged)
     except ValueError as exc:
