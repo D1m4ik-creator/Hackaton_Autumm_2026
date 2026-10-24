@@ -1,11 +1,11 @@
 """Единственная точка входа модуля анализа.
 
 Инфраструктура импортирует отсюда ``default_settings``, ``validate_settings`` и
-``analyze``. Чтобы подключить реальную модель, ML-команда реализует эти три
-функции в своих модулях пакета и меняет импорт ниже (сейчас — из ``stub``).
+``analyze``. Подключена логистическая модель оттока через адаптер
+``app/analysis/churn.py`` (модель — ``app/ml/churn_model.py``).
 """
 
-from app.analysis.stub import analyze, default_settings, validate_settings
+from app.analysis.churn import analyze, default_settings, validate_settings
 from app.analysis.types import (
     AccountData,
     AnalysisResult,

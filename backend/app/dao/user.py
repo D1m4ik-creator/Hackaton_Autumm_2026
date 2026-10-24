@@ -1,4 +1,6 @@
-from sqlalchemy import or_, select
+import uuid
+
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .base import BaseDAO
@@ -7,6 +9,18 @@ from app.db.models.users import User
 
 class UsersDAO(BaseDAO):
     model = User
+
+    # Варианты без commit: позволяют crud закрыть смену/удаление пользователя и его сессии одной транзакцией
+
+    @classmethod
+    async def update_by_id_no_commit(cls, session: AsyncSession, id: uuid.UUID, **values) -> None:
+        """Обновляет поля пользователя без commit (коммит делает crud)"""
+        await session.execute(update(User).where(User.id == id).values(**values))
+
+    @classmethod
+    async def delete_by_id_no_commit(cls, session: AsyncSession, id: uuid.UUID) -> None:
+        """Удаляет пользователя без commit (коммит делает crud)"""
+        await session.execute(delete(User).where(User.id == id))
 
     @classmethod
     async def find_by_login_or_email(cls, session: AsyncSession, value: str) -> User | None:
