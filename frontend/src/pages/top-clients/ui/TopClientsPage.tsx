@@ -19,7 +19,7 @@ export function TopClientsPage({ onSignOut }: { onSignOut?: () => Promise<void> 
     <DashboardShell className="top-clients-page" onSignOut={onSignOut}>
       <header className="top-clients-heading">
         <h1>Клиенты под риском</h1>
-        <p>{formatInteger(totalClients)} клиента · сортировка по любому столбцу</p>
+        <p>Всего клиентов: {formatInteger(totalClients)} · сортировка по любому столбцу</p>
       </header>
       <ClientRiskFilters />
       <ClientRiskTable />

@@ -10,6 +10,9 @@ import { ClientDetailPage } from '../pages/client-detail'
 import { TopClientsPage } from '../pages/top-clients'
 import { ModelSettingsPage } from '../pages/model-settings'
 import { LoginPage } from '../pages/LoginPage'
+import { ManagersPage } from '../pages/managers/ManagersPage'
+import { subscribeToEvents, useEventsStore } from '../api/events'
+import { useRiskReportStore } from '../entities/risk-report'
 
 // Минимум, сколько держим сплэш на экране — даже если сессия проверилась
 // мгновенно. Без этого лого мелькает долей секунды и анимация выглядит рвано.
@@ -58,9 +61,24 @@ function AuthProviderLayout() {
 function SessionLayout() {
   return (
     <AuthGate>
+      <LiveUpdates />
       <Outlet />
     </AuthGate>
   )
+}
+
+function LiveUpdates() {
+  const { user } = useAuth()
+  const revision = useEventsStore((state) => state.revision)
+  useEffect(() => {
+    if (!user) return
+    const unsubscribe = subscribeToEvents()
+    return () => { unsubscribe(); useRiskReportStore.getState().reset() }
+  }, [user])
+  useEffect(() => {
+    if (user) void useRiskReportStore.getState().load()
+  }, [user, revision])
+  return null
 }
 
 function RedirectToClientDetail() {
@@ -88,6 +106,11 @@ function AuthenticatedModelSettings() {
   return <ModelSettingsPage onSignOut={logout} />
 }
 
+function AuthenticatedManagers() {
+  const { logout } = useAuth()
+  return <ManagersPage onSignOut={logout} />
+}
+
 export default function App() {
   return (
     <Routes>
@@ -95,13 +118,15 @@ export default function App() {
       <Route path="/clients" element={<Navigate to="/app/clients" replace />} />
       <Route path="/clients/:clientId" element={<RedirectToClientDetail />} />
       <Route path="/model-settings" element={<Navigate to="/app/model-settings" replace />} />
+      <Route path="/users" element={<Navigate to="/app/users" replace />} />
       <Route element={<AuthProviderLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route element={<SessionLayout />}>
           <Route path="/" element={<ProtectedRoute><AuthenticatedDashboard /></ProtectedRoute>} />
           <Route path="/app/clients" element={<ProtectedRoute><AuthenticatedClients /></ProtectedRoute>} />
           <Route path="/app/clients/:clientId" element={<ProtectedRoute><AuthenticatedClientDetail /></ProtectedRoute>} />
-          <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
+          <Route path="/app/model-settings" element={<ProtectedRoute adminOnly><AuthenticatedModelSettings /></ProtectedRoute>} />
+          <Route path="/app/users" element={<ProtectedRoute adminOnly><AuthenticatedManagers /></ProtectedRoute>} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

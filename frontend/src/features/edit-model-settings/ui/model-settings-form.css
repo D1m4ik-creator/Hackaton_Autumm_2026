@@ -1,6 +1,9 @@
 .model-settings-form { display: grid; grid-template-columns: minmax(0, 35fr) minmax(0, 18fr); align-items: start; gap: 24px; }
 .model-settings-card { min-width: 0; padding: 23px; border: 1px solid var(--dashboard-border); border-radius: 14px; background: var(--dashboard-surface); }
 .model-settings-card h2 { font-size: 16px; font-weight: 700; line-height: 19px; }
+.model-settings-card > p { margin: 16px 0; color: var(--dashboard-muted); font-size: 13px; line-height: 1.5; }
+.model-settings-card textarea { font-family: monospace; }
+.model-settings-defaults { overflow: auto; margin: 20px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .model-settings-weights { min-height: 600px; }
 .model-settings-weights__controls { max-width: 620px; }
 .model-settings-weights__list { margin-top: 23px; }

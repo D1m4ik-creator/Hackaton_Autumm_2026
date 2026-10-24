@@ -6,6 +6,7 @@ import './client-risk-indicator.css'
 const riskColors = { high: '#de2626', medium: '#ff7a00', low: '#ffc76b' }
 
 export function ClientRiskIndicator({ client }: { client: Client }) {
+  if (client.risk === 'no_data' || client.score === null) return <span className="client-risk-indicator">нет оценки</span>
   const label = `${riskLabels[client.risk]} риск · ${client.score}%`
 
   return (

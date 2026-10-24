@@ -1,6 +1,8 @@
-import { Result } from 'antd'
+import { Button, Result, Spin } from 'antd'
+import { useCallback } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { getMockClientDetail } from '../../../entities/client'
+import { getCustomer } from '../../../api/customers'
+import { useApiResource } from '../../../api/useApiResource'
 import { clientsPath as resolveClientsPath } from '../../../shared/lib/app-paths'
 import { ClientActivityTimeline } from '../../../widgets/client-activity'
 import { ClientProfile } from '../../../widgets/client-profile'
@@ -12,7 +14,8 @@ import './client-detail.css'
 export function ClientDetailPage({ onSignOut }: { onSignOut?: () => Promise<void> }) {
   const { clientId = '' } = useParams<{ clientId: string }>()
   const { pathname } = useLocation()
-  const detail = getMockClientDetail(clientId)
+  const loader = useCallback(() => getCustomer(clientId), [clientId])
+  const { data: detail, loading, error, reload } = useApiResource(loader)
   const clientsPath = resolveClientsPath(pathname)
 
   return (
@@ -20,12 +23,12 @@ export function ClientDetailPage({ onSignOut }: { onSignOut?: () => Promise<void
       <header className="client-detail-toolbar">
         <Link to={clientsPath} className="client-detail-back">← Все клиенты под риском</Link>
       </header>
-      {detail ? <div className="client-detail-grid">
+      {error ? <Result status="error" title="Не удалось загрузить клиента" subTitle={error} extra={<Button onClick={reload}>Повторить</Button>} /> : loading && !detail ? <Spin /> : detail ? <Spin spinning={loading}><div className="client-detail-grid">
         <ClientProfile detail={detail} />
-        <ClientActivityTimeline items={detail.activity} />
+        <ClientActivityTimeline detail={detail} />
         <ClientRiskReasons reasons={detail.reasons} />
         <ClientServices services={detail.services} />
-      </div> : <Result status="404" title="Клиент не найден" subTitle="Проверьте ID клиента или вернитесь к списку." />}
+      </div></Spin> : null}
     </DashboardShell>
   )
 }

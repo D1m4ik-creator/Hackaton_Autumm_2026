@@ -8,6 +8,9 @@ import { useRiskReportStore } from '../../../entities/risk-report'
 import { ThemeToggle } from '../../../features/switch-theme'
 import { clientsPath as resolveClientsPath, dashboardPath as resolveDashboardPath, modelSettingsPath as resolveModelSettingsPath } from '../../../shared/lib/app-paths'
 import { AezaLogo } from '../../../shared/ui/aeza-logo/AezaLogo'
+import { useAuth } from '../../../context/AuthContext'
+import { SnapshotUpload } from '../../../features/upload-snapshot/SnapshotUpload'
+import { formatDateTime } from '../../../shared/lib/format'
 import './dashboard-shell.css'
 
 interface DashboardShellProps {
@@ -22,8 +25,11 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
   const shouldReduceMotion = useReducedMotion()
   const { message } = App.useApp()
   const report = useRiskReportStore((state) => state.report)
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [menuOpen, setMenuOpen] = useState(false)
   const [metricsOpen, setMetricsOpen] = useState(false)
+  const [snapshotOpen, setSnapshotOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const dashboardPath = resolveDashboardPath(pathname)
   const clientsPath = resolveClientsPath(pathname)
@@ -54,7 +60,9 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
     <nav className="dashboard-nav" aria-label="Основная навигация">
       <NavLink to={dashboardPath} end className={navClassName} onClick={() => setMenuOpen(false)}>Дашборд</NavLink>
       <NavLink to={clientsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Клиенты под риском</NavLink>
-      <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>
+      {isAdmin && <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>}
+      {isAdmin && <NavLink to="/app/users" className={navClassName} onClick={() => setMenuOpen(false)}>Управление менеджерами</NavLink>}
+      {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setSnapshotOpen(true))}>Загрузить снимок</button>}
       <button className="dashboard-nav__item" onClick={() => closeMenu(() => setMetricsOpen(true))}>Метрики /metrics</button>
     </nav>
     <div className="dashboard-sidebar-footer">
@@ -87,10 +95,11 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
       </main>
       <Modal open={metricsOpen} title="Метрики модели" onCancel={() => setMetricsOpen(false)} footer={<Button onClick={() => setMetricsOpen(false)}>Закрыть</Button>}>
         <div>
-          <p>Демонстрационный снимок на 24 октября 2026 года.</p>
-          <pre className="metrics-preview">{`retain_clients_total ${report.totalClients}\nretain_clients_high_risk ${report.high}\nretain_clients_medium_risk ${report.medium}\nretain_clients_low_risk ${report.low}\nretain_revenue_at_risk_eur ${report.revenueAtRisk}`}</pre>
+          <p>Сводка, версия {report.version}. Пересчёт: {formatDateTime(report.recalculatedAt)}</p>
+          <pre className="metrics-preview">{`retain_clients_total ${report.totalClients}\nretain_clients_high_risk ${report.high}\nretain_clients_medium_risk ${report.medium}\nretain_clients_low_risk ${report.low}\nretain_clients_no_data ${report.no_data}\nretain_revenue_at_risk_eur ${report.revenueAtRisk}`}</pre>
         </div>
       </Modal>
+      {isAdmin && <SnapshotUpload open={snapshotOpen} onClose={() => setSnapshotOpen(false)} />}
     </div>
   )
 }

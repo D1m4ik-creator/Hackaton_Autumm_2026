@@ -1,36 +1,27 @@
 import type { Client } from './types'
 
-export type ClientServiceStatus = 'active' | 'prolong_wait'
-
 export interface ClientRiskReason {
   id: string
   title: string
-  description: string
-  contribution: number
-  tone: 'accent' | 'strong' | 'muted' | 'subtle'
-}
-
-export interface ClientActivity {
-  id: string
-  timeLabel: string
-  description: string
-  highlighted?: boolean
 }
 
 export interface ClientService {
   id: string
   name: string
-  status: ClientServiceStatus
+  status: string
   priceCents: number
-  period: 'month' | 'year'
-  renewalDescription: string
+  period: string
+  expiresAt: string
   autoProlong: boolean
 }
 
 export interface ClientDetail {
   client: Client
-  status: ClientServiceStatus
   reasons: ClientRiskReason[]
-  activity: ClientActivity[]
   services: ClientService[]
+  transactions: { total: number; performed: number; notPerformed: number }
+  calculatedAt: string | null
+  asOf: string | null
+  withdrawBalanceCents: number
+  bonusBalanceCents: number
 }

@@ -1,16 +1,18 @@
-import type { ClientActivity } from '../../../entities/client'
+import type { ClientDetail } from '../../../entities/client'
+import { formatDateTime, formatEuroCents } from '../../../shared/lib/format'
 import './client-activity.css'
 
-export function ClientActivityTimeline({ items }: { items: ClientActivity[] }) {
+export function ClientActivityTimeline({ detail }: { detail: ClientDetail }) {
   return (
     <section className="client-activity client-detail-card" aria-labelledby="client-activity-title">
-      <h2 id="client-activity-title">Активность</h2>
-      <ol className="client-activity__list">
-        {items.map((item) => <li key={item.id} className={item.highlighted ? 'client-activity__item--highlighted' : ''}>
-          <p className="client-activity__time">{item.timeLabel}</p>
-          <p className="client-activity__description">{item.description}</p>
-        </li>)}
-      </ol>
+      <h2 id="client-activity-title">Транзакции и расчёт</h2>
+      <dl className="client-activity__list">
+        <div><dt>Всего транзакций</dt><dd>{detail.transactions.total}</dd></div>
+        <div><dt>Выполнено / не выполнено</dt><dd>{detail.transactions.performed} / {detail.transactions.notPerformed}</dd></div>
+        <div><dt>Пополнения</dt><dd>{formatEuroCents(detail.client.totalReplenishedCents)}</dd></div>
+        <div><dt>Данные на</dt><dd>{formatDateTime(detail.asOf)}</dd></div>
+        <div><dt>Пересчёт</dt><dd>{formatDateTime(detail.calculatedAt)}</dd></div>
+      </dl>
     </section>
   )
 }

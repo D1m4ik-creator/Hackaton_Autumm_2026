@@ -1,65 +1,65 @@
-import { Alert, App, Button, ConfigProvider, InputNumber, Slider } from 'antd'
+import { Alert, App, Button, Input, Spin } from 'antd'
 import { useState } from 'react'
-import type { CSSProperties, FormEvent } from 'react'
-import { getWeightSum } from '../../../entities/model-settings'
-import { useModelSettingsStore } from '../model/store'
-import { AddModelFeatureModal } from './AddModelFeatureModal'
+import type { FormEvent } from 'react'
+import { getModelSettings, patchModelSettings } from '../../../api/model-settings'
+import { useApiResource } from '../../../api/useApiResource'
+import { useEventsStore } from '../../../api/events'
+import { formatDateTime } from '../../../shared/lib/format'
 import './model-settings-form.css'
 
-const weightColors = ['var(--dashboard-accent-bright)', 'var(--dashboard-text)', 'var(--dashboard-ring-medium)', 'var(--dashboard-muted)']
-const sliderTheme = { components: { Slider: { railSize: 6, handleSize: 18, handleSizeHover: 18, handleLineWidth: 0, handleLineWidthHover: 0, railBg: 'var(--dashboard-ring-track)', railHoverBg: 'var(--dashboard-ring-track)' } } }
-
 export function ModelSettingsForm() {
-  const { draft, error, setWeight, setThreshold, save } = useModelSettingsStore()
+  const { data, loading, error, reload, setData } = useApiResource(getModelSettings)
   const { message } = App.useApp()
-  const [addingFeature, setAddingFeature] = useState(false)
-  const weightSum = getWeightSum(draft)
+  const [draft, setDraft] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const value = draft ?? (data ? JSON.stringify(data.settings, null, 2) : '')
+  const dirty = draft !== null && draft !== JSON.stringify(data?.settings, null, 2)
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    try {
-      if (save()) message.success('Настройки сохранены локально')
-    } catch {
-      message.error('Не удалось сохранить настройки в браузере.')
+    setSaveError(null)
+    let settings: unknown
+    try { settings = JSON.parse(value) } catch {
+      setSaveError('Проверьте формат JSON.'); return
     }
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      setSaveError('Настройки должны быть объектом JSON.'); return
+    }
+    setSaving(true)
+    try {
+      const saved = await patchModelSettings(settings as Record<string, unknown>)
+      setData(saved)
+      setDraft(null)
+      useEventsStore.getState().invalidate()
+      message.success('Настройки сохранены, оценки пересчитаны')
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Не удалось сохранить настройки')
+    } finally { setSaving(false) }
   }
 
+  if (!data) return error
+    ? <Alert type="error" title={error} action={<Button onClick={reload}>Повторить</Button>} />
+    : <Spin />
+
   return (
-    <ConfigProvider theme={sliderTheme}>
+    <Spin spinning={loading}>
       <form className="model-settings-form" onSubmit={submit}>
-        <section className="model-settings-card model-settings-weights" aria-labelledby="model-weights-title">
-          <h2 id="model-weights-title">Веса признаков</h2>
-          <div className="model-settings-weights__controls">
-            <div className="model-settings-weights__list">
-              {draft.features.map((feature, index) => {
-                const color = weightColors[Math.min(index, weightColors.length - 1)]
-                return <div className="model-weight" key={feature.id} style={{ '--weight-color': color } as CSSProperties}>
-                  <div className="model-weight__header">
-                    <label id={`weight-label-${feature.id}`} htmlFor={`weight-${feature.id}`}>{feature.name}</label>
-                    <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} onChange={(value) => setWeight(feature.id, value ?? 0)} />
-                  </div>
-                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} onChange={(value) => setWeight(feature.id, value)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (value) => value?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
-                </div>
-              })}
-            </div>
-            <Button className="model-settings-add" htmlType="button" onClick={() => setAddingFeature(true)}>+ Добавить признак</Button>
-            <p className="model-settings-weights__note">Сумма весов: {weightSum.toFixed(2)} · новый признак подключается без переработки модели</p>
-          </div>
+        <section className="model-settings-card" aria-labelledby="model-config-title">
+          <h2 id="model-config-title">Параметры текущей модели</h2>
+          <p>Конфигурация в формате JSON. asOf — дата расчёта в ISO-8601 или null для текущего времени.</p>
+          <Input.TextArea aria-label="Настройки модели JSON" value={value} onChange={(event) => { setDraft(event.target.value); setSaveError(null) }} disabled={saving} autoSize={{ minRows: 14, maxRows: 28 }} spellCheck={false} />
+          <Button className="model-settings-save" htmlType="submit" loading={saving} disabled={loading || !dirty}>СОХРАНИТЬ ИЗМЕНЕНИЯ</Button>
+          <p className="model-settings-save-note">Обновлено: {formatDateTime(data.updatedAt)}</p>
+          {(saveError || error) && <Alert type="error" title={saveError ?? error} role="alert" />}
         </section>
-        <section className="model-settings-card model-settings-thresholds" aria-labelledby="model-thresholds-title">
-          <h2 id="model-thresholds-title">Пороги уровней риска</h2>
-          <div className="model-settings-thresholds__fields">
-            {(['high', 'medium'] as const).map((level) => <div className="model-threshold" key={level}>
-              <label htmlFor={`threshold-${level}`}>{level === 'high' ? 'Высокий' : 'Средний'} риск, от</label>
-              <InputNumber<number> id={`threshold-${level}`} aria-label={`${level === 'high' ? 'Высокий' : 'Средний'} риск, от`} min={0} max={100} precision={0} controls={false} value={draft.thresholds[level]} formatter={(value, { userTyping, input }) => userTyping ? input : `${value ?? ''} баллов`} parser={(value) => Number((value ?? '').replace(/[^\d-]/g, ''))} onChange={(value) => setThreshold(level, value ?? 0)} />
-            </div>)}
-          </div>
-          <Button className="model-settings-save" htmlType="submit">СОХРАНИТЬ ИЗМЕНЕНИЯ</Button>
-          <p className="model-settings-save-note">Сохраняется локально — переживёт перезапуск приложения</p>
-          {error && <Alert className="model-settings-error" type="error" showIcon title={error} role="alert" />}
+        <section className="model-settings-card">
+          <h2>Значения по умолчанию</h2>
+          <pre className="model-settings-defaults">{JSON.stringify(data.defaults, null, 2)}</pre>
+          <Button disabled={saving} onClick={() => setDraft(JSON.stringify(data.defaults, null, 2))}>Подставить значения</Button>
         </section>
       </form>
-      <AddModelFeatureModal open={addingFeature} onClose={() => setAddingFeature(false)} />
-    </ConfigProvider>
+    </Spin>
   )
 }
