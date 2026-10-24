@@ -95,6 +95,17 @@ async def test_deleted_manager_loses_access(admin: AsyncClient, manager):
     assert (await admin.delete(f"/api/v1/users/{user_id}")).status_code == 404
 
 
+async def test_recreated_manager_rejects_old_token(admin: AsyncClient, manager):
+    """Менеджера удалили и создали заново с тем же логином — старый access-токен (другой uid) не действует."""
+    m, user_id = manager
+    assert (await admin.delete(f"/api/v1/users/{user_id}")).status_code == 204
+    recreated = await admin.post("/api/v1/users", json=MANAGER)
+    assert recreated.status_code == 201
+    assert recreated.json()["id"] != user_id
+    # Старый токен ещё в cookie и по сроку жив, но несёт прежний uid
+    assert (await m.get("/api/v1/auth/me")).status_code == 401
+
+
 async def test_password_change_closes_old_sessions(admin: AsyncClient, manager):
     m, user_id = manager
     assert (await admin.patch(f"/api/v1/users/{user_id}", json={"password": "NewPassw0rd-2"})).status_code == 200

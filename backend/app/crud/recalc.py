@@ -10,7 +10,9 @@ import logging
 from collections.abc import Sequence
 from datetime import datetime, timezone
 
+from fastapi import HTTPException
 from sqlalchemy import Row, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import analysis
@@ -44,16 +46,46 @@ logger = logging.getLogger(__name__)
 # Ключ advisory-блокировки пересчёта (общий для всех воркеров)
 RECALC_LOCK_KEY = 815_007_001
 
+# Сколько ждать advisory-блокировку, прежде чем отдать 503 (мс)
+LOCK_TIMEOUT_MS = 15_000
+# Сколько секунд советуем подождать до повтора запроса
+LOCK_RETRY_AFTER_SECONDS = 5
+# SQLSTATE, который Postgres возвращает при срабатывании lock_timeout
+_LOCK_NOT_AVAILABLE_SQLSTATE = "55P03"
+
 
 class AnalysisContractError(Exception):
     """Модель вернула результат, нарушающий контракт (§5)"""
 
 
+def _is_lock_timeout(exc: DBAPIError) -> bool:
+    """True, если ошибка — срабатывание lock_timeout (55P03)"""
+    return getattr(getattr(exc, "orig", None), "sqlstate", None) == _LOCK_NOT_AVAILABLE_SQLSTATE
+
+
 async def acquire_lock(session: AsyncSession) -> None:
-    """Берёт транзакционную advisory-блокировку; снимается на commit/rollback"""
+    """Берёт транзакционную advisory-блокировку; снимается на commit/rollback.
+
+    Ожидание ограничено lock_timeout: если блокировку удерживает другой пересчёт
+    дольше LOCK_TIMEOUT_MS, вместо бесконечного ожидания возвращаем 503.
+    """
+    # SET LOCAL действует до конца транзакции; этот же execute её и открывает
     await session.execute(
-        text("SELECT pg_advisory_xact_lock(:key)"), {"key": RECALC_LOCK_KEY}
+        text("SELECT set_config('lock_timeout', :ms, true)"), {"ms": str(LOCK_TIMEOUT_MS)}
     )
+    try:
+        await session.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"), {"key": RECALC_LOCK_KEY}
+        )
+    except DBAPIError as exc:
+        if _is_lock_timeout(exc):
+            await session.rollback()
+            raise HTTPException(
+                status_code=503,
+                detail="Идёт пересчёт данных, повторите запрос позже",
+                headers={"Retry-After": str(LOCK_RETRY_AFTER_SECONDS)},
+            ) from exc
+        raise
 
 
 # Ключ в сохранённых настройках: список удалённых пунктов вида «секция.ключ».
@@ -229,29 +261,13 @@ def check_result(result: AnalysisResult, account_ids: set[int]) -> list[Customer
     return checked
 
 
-async def recalculate(session: AsyncSession, reason: str) -> RiskSummary:
-    """Полный пересчёт в текущей транзакции (§6.3); lock и commit — у вызывающего"""
-    settings = await effective_settings(session)
-    as_of = _resolve_as_of(settings)
+def _materialize(result: AnalysisResult, account_ids: set[int], now: datetime) -> tuple[list[dict], dict, int, int]:
+    """Чистая CPU-часть пересчёта: проверка контракта, строки результатов и агрегаты.
 
-    accounts = await AccountDAO.load_rows(session)
-    services = await ServiceDAO.load_rows(session)
-    transactions = await TransactionDAO.load_rows(session)
-    source = _build_source(accounts, services, transactions)
-
-    try:
-        result = await asyncio.to_thread(analysis.analyze, source, settings, as_of)
-    except AnalysisContractError:
-        raise
-    except Exception as exc:
-        logger.exception("Модель анализа завершилась с ошибкой")
-        raise AnalysisContractError(f"модель завершилась с ошибкой: {exc}") from exc
-    if not isinstance(result.customers, list) or not isinstance(result.loss_explanation, str):
-        raise AnalysisContractError("результат модели должен содержать customers (list) и loss_explanation (str)")
-    account_ids = {account.id for account in source.accounts}
+    Вынесена в отдельную функцию, чтобы считать её в потоке (asyncio.to_thread) и
+    не блокировать цикл событий на больших снимках (100k+ клиентов).
+    """
     customers = check_result(result, account_ids)
-
-    now = datetime.now(timezone.utc)
     by_level = {level: {"customers": 0, "expectedLossCents": 0} for level in LEVELS}
     total_loss = 0
     rows: list[dict] = []
@@ -273,12 +289,42 @@ async def recalculate(session: AsyncSession, reason: str) -> RiskSummary:
         by_level[customer.level]["customers"] += 1
         by_level[customer.level]["expectedLossCents"] += customer.expected_loss_cents
         total_loss += customer.expected_loss_cents
+    return rows, by_level, total_loss, len(customers)
+
+
+async def recalculate(session: AsyncSession, reason: str) -> RiskSummary:
+    """Полный пересчёт в текущей транзакции (§6.3); lock и commit — у вызывающего"""
+    settings = await effective_settings(session)
+    as_of = _resolve_as_of(settings)
+
+    accounts = await AccountDAO.load_rows(session)
+    services = await ServiceDAO.load_rows(session)
+    transactions = await TransactionDAO.load_rows(session)
+    # Сборка снимка из строк БД — чистый CPU, считаем в потоке
+    source = await asyncio.to_thread(_build_source, accounts, services, transactions)
+
+    try:
+        result = await asyncio.to_thread(analysis.analyze, source, settings, as_of)
+    except AnalysisContractError:
+        raise
+    except Exception as exc:
+        logger.exception("Модель анализа завершилась с ошибкой")
+        raise AnalysisContractError(f"модель завершилась с ошибкой: {exc}") from exc
+    if not isinstance(result.customers, list) or not isinstance(result.loss_explanation, str):
+        raise AnalysisContractError("результат модели должен содержать customers (list) и loss_explanation (str)")
+    account_ids = {account.id for account in source.accounts}
+
+    now = datetime.now(timezone.utc)
+    # Проверка контракта и сборка строк/агрегатов — тоже CPU, в потоке
+    rows, by_level, total_loss, customers_total = await asyncio.to_thread(
+        _materialize, result, account_ids, now
+    )
 
     await RiskResultDAO.replace_all(session, rows)
     return await RiskSummaryDAO.save(
         session,
         reason=reason,
-        customers_total=len(customers),
+        customers_total=customers_total,
         by_level=by_level,
         expected_loss_cents=total_loss,
         loss_explanation=result.loss_explanation,

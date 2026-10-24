@@ -8,6 +8,7 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 import app.crud.auth as crud_auth
 from app.core.config import get_settings
 from app.core.engine import SessionLocal
+from app.core.openapi import error_responses
 from app.core.security import access_decode_token, get_token
 from app.dao.risk_summary import RiskSummaryDAO
 from app.db.models.risk_summary import RiskSummary
@@ -17,6 +18,7 @@ USER_RECHECK_SECONDS = 60
 router = APIRouter(
     tags=["events"],
     dependencies=[Depends(crud_auth.get_current_user)],
+    responses=error_responses(401),
 )
 
 

@@ -34,6 +34,11 @@ class SessionsDAO(BaseDAO):
         await session.commit()
 
     @classmethod
+    async def delete_by_login_no_commit(cls, session: AsyncSession, login: str):
+        """Закрывает все сессии пользователя без commit (коммит делает crud в общей транзакции)"""
+        await session.execute(delete(cls.model).where(cls.model.login == login))
+
+    @classmethod
     async def delete_expired(cls, session: AsyncSession):
         """Удаляет сессии с истёкшим сроком"""
         await session.execute(delete(cls.model).where(cls.model.expires_at < func.now()))

@@ -49,12 +49,19 @@ class SnapshotTransactionIn(CamelModel):
     service_id: BigIntId
 
 
+# Потолки размеров списков снимка: заведомо больше реальных данных, но защищают
+# от запроса, который раздувает память ещё до бизнес-проверок (превышение -> 422)
+MAX_ACCOUNTS = 200_000
+MAX_SERVICES = 600_000
+MAX_TRANSACTIONS = 2_000_000
+
+
 class SnapshotIn(CamelModel):
     """Полный входной снимок исходных данных"""
 
-    accounts: list[SnapshotAccountIn]
-    services: list[SnapshotServiceIn]
-    transactions: list[SnapshotTransactionIn]
+    accounts: Annotated[list[SnapshotAccountIn], Field(max_length=MAX_ACCOUNTS)]
+    services: Annotated[list[SnapshotServiceIn], Field(max_length=MAX_SERVICES)]
+    transactions: Annotated[list[SnapshotTransactionIn], Field(max_length=MAX_TRANSACTIONS)]
 
 
 class SnapshotLoadResult(CamelModel):
