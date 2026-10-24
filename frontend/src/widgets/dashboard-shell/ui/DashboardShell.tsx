@@ -70,7 +70,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
         <span className="dashboard-mobile-brand"><AezaLogo className="dashboard-brand__logo" /></span>
         <Button type="text" icon={<MenuOutlined />} aria-label="Открыть меню" onClick={() => setMenuOpen(true)} />
       </div>
-      <Drawer title="Навигация" placement="left" open={menuOpen} onClose={() => setMenuOpen(false)} className="dashboard-mobile-menu" size={260} styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}>{sidebar}</Drawer>
+      <Drawer title="Навигация" placement="right" open={menuOpen} onClose={() => setMenuOpen(false)} className="dashboard-mobile-menu" size={260} styles={{ body: { padding: 0, display: 'flex', flexDirection: 'column' } }}>{sidebar}</Drawer>
       <main id="dashboard-content" className="dashboard-main" tabIndex={-1}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div

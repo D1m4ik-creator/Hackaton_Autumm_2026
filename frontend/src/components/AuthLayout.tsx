@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AezaLogo } from '../shared/ui/aeza-logo/AezaLogo'
 import { GradientBlinds } from './GradientBlinds'
 import '../styles/auth.css'
 
@@ -35,8 +36,7 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
           />
         </div>
         <div className="auth-visual__brand">
-          
-          <span></span>
+          <AezaLogo className="auth-visual__brand-logo" />
         </div>
         <div className="auth-visual__footer">
           <p className="auth-visual__quote">

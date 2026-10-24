@@ -25,7 +25,10 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
   const report = useRiskReportStore((state) => state.report)
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const clientsPath = pathname.startsWith('/app/') ? '/app/clients' : '/clients'
+  // Дашборд живёт на "/" (а не "/app/дашборд") — без явного учёта этого
+  // клик отсюда уводил на легаси-алиас "/clients" вне SessionLayout,
+  // что полностью перемонтировало AuthProvider и заново показывало сплэш.
+  const clientsPath = pathname === '/' || pathname.startsWith('/app/') ? '/app/clients' : '/clients'
   const count = report[level]
   const percent = count / report.totalClients * 100
   const isHigh = level === 'high'
@@ -35,8 +38,6 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
     medium: 'var(--dashboard-ring-medium)',
     low: 'var(--dashboard-ring-low)',
   }[level]
-  const angle = percent / 100 * Math.PI * 2
-
   function openFilteredClients() {
     useClientFiltersStore.getState().setRisk(level)
     navigate(clientsPath)
@@ -47,10 +48,7 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
       <button className="risk-summary__button" onClick={openFilteredClients} aria-label={`${title}: ${count} клиентов. Перейти к списку`}>
         <div className="risk-dial" style={{ width: isHigh ? 170 : 90, height: isHigh ? 170 : 90 }}>
           <Progress className="risk-dial__progress" type="circle" percent={percent} size={isHigh ? 170 : 90} strokeWidth={isHigh ? 17.65 : 20} strokeColor={color} railColor="var(--dashboard-ring-track)" strokeLinecap="butt" showInfo={false} />
-          {isHigh && <>
-            <span className="risk-dial__value">{formatPercent(percent)}</span>
-            <span className="risk-dial__head" style={{ left: `${50 + Math.cos(angle) * 50}%`, top: `${50 + Math.sin(angle) * 50}%` }} />
-          </>}
+          {isHigh && <span className="risk-dial__value">{formatPercent(percent)}</span>}
         </div>
         <div className="risk-summary__text">
           <h2>{title}</h2>
