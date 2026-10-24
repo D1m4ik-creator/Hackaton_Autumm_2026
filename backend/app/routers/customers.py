@@ -1,8 +1,9 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Response
 
 import app.crud.auth as crud_auth
+import app.crud.customer_export as customer_export
 import app.crud.customers as crud_customers
 from app.core.engine import ReadSessionDep
 from app.core.openapi import error_responses
@@ -32,6 +33,31 @@ async def list_customers(
     """Список клиентов с фильтром, поиском, сортировкой и пагинацией"""
     return await crud_customers.list_customers(
         db, levels=level, search=search, sort=sort, order=order, page=page, page_size=page_size
+    )
+
+
+# Объявлен до /{customerId}, иначе «export» попадёт в параметр пути
+@router.get(
+    "/export",
+    response_class=Response,
+    responses={200: {"content": {media: {} for media in customer_export.MEDIA_TYPES.values()}}},
+)
+async def export_customers(
+    db: ReadSessionDep,
+    format: customer_export.ExportFormat = "csv",
+    level: Annotated[list[Level] | None, Query(description="Фильтр по уровням риска")] = None,
+    search: Annotated[str | None, Query(max_length=100, description="Подстрока email; только цифры — ещё и точный id")] = None,
+    sort: Sort = "riskScore",
+    order: Literal["asc", "desc"] = "desc",
+) -> Response:
+    """Выгрузка клиентов в CSV, Excel или JSON с теми же фильтром и сортировкой, что список (без пагинации)"""
+    body, filename = await customer_export.export_customers(
+        db, fmt=format, levels=level, search=search, sort=sort, order=order
+    )
+    return Response(
+        content=body,
+        media_type=customer_export.MEDIA_TYPES[format],
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

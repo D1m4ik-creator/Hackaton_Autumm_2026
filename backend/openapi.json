@@ -343,6 +343,141 @@
         }
       }
     },
+    "/api/v1/customers/export": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Export Customers",
+        "description": "Выгрузка клиентов в CSV, Excel или JSON с теми же фильтром и сортировкой, что список (без пагинации)",
+        "operationId": "export_customers_api_v1_customers_export_get",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "csv",
+                "xlsx",
+                "json"
+              ],
+              "type": "string",
+              "default": "csv",
+              "title": "Format"
+            }
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low",
+                      "no_data"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Фильтр по уровням риска",
+              "title": "Level"
+            },
+            "description": "Фильтр по уровням риска"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Подстрока email; только цифры — ещё и точный id",
+              "title": "Search"
+            },
+            "description": "Подстрока email; только цифры — ещё и точный id"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "balance",
+                "totalReplenished",
+                "riskScore",
+                "expectedLossCents"
+              ],
+              "type": "string",
+              "default": "riskScore",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/csv; charset=utf-8": {},
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {},
+              "application/json": {}
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/customers/{customerId}": {
       "get": {
         "tags": [
@@ -433,6 +568,74 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/churn-trend": {
+      "get": {
+        "tags": [
+          "analytics"
+        ],
+        "summary": "Churn Trend",
+        "description": "График оттока по неделям: факт непродлений, прогноз и число услуг под риском",
+        "operationId": "churn_trend_api_v1_analytics_churn_trend_get",
+        "parameters": [
+          {
+            "name": "weeksBack",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 52,
+              "minimum": 1,
+              "default": 8,
+              "title": "Weeksback"
+            }
+          },
+          {
+            "name": "weeksForward",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 52,
+              "minimum": 1,
+              "default": 8,
+              "title": "Weeksforward"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChurnTrendOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1071,6 +1274,65 @@
           }
         }
       }
+    },
+    "/api/v1/auth/oidc/status": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Oidc Status",
+        "description": "Фронт дёргает это, чтобы не рисовать кнопку входа через Authentik, если он не настроен",
+        "operationId": "oidc_status_api_v1_auth_oidc_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/login": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_oidc_login_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Callback",
+        "description": "Вход через Authentik даёт доступ только существующему локальному аккаунту\n(admin/manager, созданному через панель «Управление пользователями») —\nсопоставляем по email. Нет совпадения — понятная ошибка на фронте,\nавтосоздание аккаунтов не делаем: роль остаётся авторитетной в нашей БД.",
+        "operationId": "callback_api_v1_auth_oidc_callback_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1099,6 +1361,70 @@
         ],
         "title": "ByLevel",
         "description": "Агрегаты по всем четырём уровням риска"
+      },
+      "ChurnTrendBucket": {
+        "properties": {
+          "periodStart": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Periodstart"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Periodend"
+          },
+          "isForecast": {
+            "type": "boolean",
+            "title": "Isforecast"
+          },
+          "expiredServices": {
+            "type": "integer",
+            "title": "Expiredservices"
+          },
+          "churnedServices": {
+            "type": "integer",
+            "title": "Churnedservices"
+          }
+        },
+        "type": "object",
+        "required": [
+          "periodStart",
+          "periodEnd",
+          "isForecast",
+          "expiredServices",
+          "churnedServices"
+        ],
+        "title": "ChurnTrendBucket",
+        "description": "Одна неделя графика оттока: услуги с истечением в этот период"
+      },
+      "ChurnTrendOut": {
+        "properties": {
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/ChurnTrendBucket"
+            },
+            "type": "array",
+            "title": "Buckets"
+          },
+          "atRiskServices": {
+            "type": "integer",
+            "title": "Atriskservices"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "buckets",
+          "atRiskServices",
+          "generatedAt"
+        ],
+        "title": "ChurnTrendOut",
+        "description": "График оттока по неделям (GET /analytics/churn-trend)"
       },
       "CurrentUser": {
         "properties": {
