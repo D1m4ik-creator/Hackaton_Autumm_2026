@@ -1,7 +1,6 @@
 import { Result } from 'antd'
 import { Link, useParams } from 'react-router-dom'
 import { getMockClientDetail } from '../../../entities/client'
-import { ThemeToggle } from '../../../features/switch-theme'
 import { ClientActivityTimeline } from '../../../widgets/client-activity'
 import { ClientProfile } from '../../../widgets/client-profile'
 import { ClientRiskReasons } from '../../../widgets/client-risk-reasons'
@@ -18,7 +17,6 @@ export function ClientDetailPage({ onSignOut }: { onSignOut?: () => Promise<void
     <DashboardShell className="client-detail-page" onSignOut={onSignOut}>
       <header className="client-detail-toolbar">
         <Link to={clientsPath} className="client-detail-back">← Все клиенты под риском</Link>
-        <ThemeToggle />
       </header>
       {detail ? <div className="client-detail-grid">
         <ClientProfile detail={detail} />

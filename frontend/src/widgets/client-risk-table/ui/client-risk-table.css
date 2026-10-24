@@ -1,30 +1,30 @@
-.client-risk-table { min-height: 680px; padding: 24px 23px; border: 1px solid #e4e2df; border-radius: 14px; background: #fff; }
-.client-risk-table .ant-table { color: #121110; background: transparent; font-size: 13px; font-variant-numeric: tabular-nums; }
-.client-risk-table .ant-table-thead > tr > th { height: 32px; padding: 0 0 14px; border-bottom: 1px solid #e4e2df; background: transparent; color: #7a7875; font-size: 11px; font-weight: 700; line-height: 14px; white-space: nowrap; }
+.client-risk-table { min-height: 680px; padding: 24px 23px; border: 1px solid var(--dashboard-border); border-radius: 14px; background: var(--dashboard-surface); }
+.client-risk-table .ant-table { color: var(--dashboard-text); background: transparent; font-size: 13px; font-variant-numeric: tabular-nums; }
+.client-risk-table .ant-table-thead > tr > th { height: 32px; padding: 0 0 14px; border-bottom: 1px solid var(--dashboard-border); background: transparent; color: var(--dashboard-muted); font-size: 11px; font-weight: 700; line-height: 14px; white-space: nowrap; }
 .client-risk-table .ant-table-thead > tr > th::before { display: none; }
 .client-risk-table .ant-table-thead > tr > th.ant-table-column-sort { background: transparent; }
-.client-risk-table .ant-table-thead > tr > th:hover { background: #fafafa; }
+.client-risk-table .ant-table-thead > tr > th:hover { background: var(--dashboard-hover); }
 .client-risk-table .ant-table-column-sorters { justify-content: flex-start; gap: 4px; width: fit-content; }
 .client-risk-table .ant-table-column-title { flex: none; }
 .client-risk-table .ant-table-cell.ant-table-cell-align-center .ant-table-column-sorters { margin-inline: auto; }
 .client-risk-table .ant-table-thead > tr > th:nth-child(3) .ant-table-column-sorters,
 .client-risk-table .ant-table-thead > tr > th:nth-child(4) .ant-table-column-sorters { margin-inline: auto; }
-.client-sort-icon { display: inline-block; color: #7a7875; font-size: 14px; font-weight: 400; line-height: 14px; }
-.client-sort-icon--active { color: #121110; font-weight: 700; }
+.client-sort-icon { display: inline-block; color: var(--dashboard-muted); font-size: 14px; font-weight: 400; line-height: 14px; }
+.client-sort-icon--active { color: var(--dashboard-text); font-weight: 700; }
 .client-risk-table .ant-table-tbody::before { display: table-row; height: 14px; content: ''; }
 .client-risk-table .ant-table-tbody > tr > td { height: 56px; padding: 14px 0; border-bottom: 0; line-height: 24px; white-space: nowrap; }
 .client-risk-table .ant-table-tbody > tr { cursor: pointer; }
 .client-risk-table .ant-table-tbody > tr > td.ant-table-column-sort { background: transparent; }
-.client-risk-table .ant-table-tbody > tr > td.ant-table-cell-row-hover { background: #faf9f7; }
-.client-risk-table .ant-table-tbody > tr > td.client-id-column { color: #7a7875; }
+.client-risk-table .ant-table-tbody > tr > td.ant-table-cell-row-hover { background: var(--dashboard-row-hover); }
+.client-risk-table .ant-table-tbody > tr > td.client-id-column { color: var(--dashboard-muted); }
 .client-risk-table .ant-table-thead > tr > th.client-risk-column,
 .client-risk-table .ant-table-tbody > tr > td.client-risk-column { padding-right: 37px; }
 .client-risk-table .client-risk-column .ant-table-column-sorters { margin-left: auto; }
 .client-risk-table .client-risk-column .client-sort-icon:not(.client-sort-icon--active) { display: none; }
 .client-risk-table .client-risk-column:hover .client-sort-icon,
 .client-risk-table .client-risk-column:focus-visible .client-sort-icon { display: inline-block; }
-.client-table-link { display: block; width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: #121110; text-align: left; text-decoration: none; text-overflow: ellipsis; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
-.client-table-link:hover { color: #db6600; }
+.client-table-link { display: block; width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--dashboard-text); text-align: left; text-decoration: none; text-overflow: ellipsis; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.client-table-link:hover { color: var(--dashboard-accent); }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (max-width: 767px) {

@@ -1,0 +1,3 @@
+.aeza-logo { display: inline-flex; align-items: center; height: 1em; color: inherit; }
+.aeza-logo__letter { height: 100%; width: auto; margin-right: -0.06em; }
+.aeza-logo__letter:last-child { margin-right: 0; }

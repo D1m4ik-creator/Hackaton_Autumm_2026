@@ -1,6 +1,7 @@
 import { Progress, Tooltip } from 'antd'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useRiskReportStore } from '../../../entities/risk-report'
-import { useExploreClientsStore } from '../../../features/explore-clients'
+import { useClientFiltersStore } from '../../../features/filter-clients'
 import { formatEuro, formatInteger, formatPercent } from '../../../shared/lib/format'
 import { BentoCard } from '../../../shared/ui/bento-card'
 
@@ -22,7 +23,9 @@ export function AccountSummary() {
 
 export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
   const report = useRiskReportStore((state) => state.report)
-  const openClients = useExploreClientsStore((state) => state.openClients)
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const clientsPath = pathname.startsWith('/app/') ? '/app/clients' : '/clients'
   const count = report[level]
   const percent = count / report.totalClients * 100
   const isHigh = level === 'high'
@@ -34,9 +37,14 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
   }[level]
   const angle = percent / 100 * Math.PI * 2
 
+  function openFilteredClients() {
+    useClientFiltersStore.getState().setRisk(level)
+    navigate(clientsPath)
+  }
+
   return (
     <BentoCard className={`risk-summary risk-summary--${level}`} label={title}>
-      <button className="risk-summary__button" onClick={() => openClients(level)} aria-label={`${title}: ${count} клиентов. Открыть список`}>
+      <button className="risk-summary__button" onClick={openFilteredClients} aria-label={`${title}: ${count} клиентов. Перейти к списку`}>
         <div className="risk-dial" style={{ width: isHigh ? 170 : 90, height: isHigh ? 170 : 90 }}>
           <Progress className="risk-dial__progress" type="circle" percent={percent} size={isHigh ? 170 : 90} strokeWidth={isHigh ? 17.65 : 20} strokeColor={color} railColor="var(--dashboard-ring-track)" strokeLinecap="butt" showInfo={false} />
           {isHigh && <>

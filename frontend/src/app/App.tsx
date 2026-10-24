@@ -1,6 +1,7 @@
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
-import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
+import { Navigate, Outlet, Route, Routes, useParams } from 'react-router-dom'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { AuthProvider, useAuth } from '../context/AuthContext'
 import { SplashScreen } from '../shared/ui/splash-screen/SplashScreen'
@@ -10,32 +11,41 @@ import { TopClientsPage } from '../pages/top-clients'
 import { ModelSettingsPage } from '../pages/model-settings'
 import { LoginPage } from '../pages/LoginPage'
 
-// Держит сплэш-экран (лого Aeza), пока AuthProvider не закончит
-// первую проверку сессии — покрывает и первую загрузку, и F5.
+// Минимум, сколько держим сплэш на экране — даже если сессия проверилась
+// мгновенно. Без этого лого мелькает долей секунды и анимация выглядит рвано.
+const MIN_SPLASH_MS = 900
+
+// Держит сплэш-экран (лого Aeza), пока AuthProvider не закончит первую
+// проверку сессии (покрывает и первую загрузку, и F5), и плавно
+// кросс-фейдит его в контент приложение — без резкого обрыва анимации.
 function AuthGate({ children }: { children: ReactNode }) {
   const { isLoading } = useAuth()
-  if (isLoading) return <SplashScreen />
-  return <>{children}</>
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false)
+
+  useEffect(() => {
+    const timer = setTimeout(() => setMinTimeElapsed(true), MIN_SPLASH_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const showSplash = isLoading || !minTimeElapsed
+
+  return (
+    <AnimatePresence mode="wait">
+      {showSplash
+        ? <SplashScreen key="splash" />
+        : <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, ease: 'easeOut' }}>{children}</motion.div>}
+    </AnimatePresence>
+  )
 }
 
+// Анимация перехода между страницами живёт в DashboardShell (только вокруг
+// <main>) — сайдбар общий для всех защищённых страниц и не должен
+// переанимироваться при каждой навигации, иначе весь экран "смазывается".
 function SessionLayout() {
-  const location = useLocation()
-  const shouldReduceMotion = useReducedMotion()
-
   return (
     <AuthProvider>
       <AuthGate>
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={location.pathname}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
-            transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: [0.4, 0, 0.2, 1] }}
-          >
-            <Outlet />
-          </motion.div>
-        </AnimatePresence>
+        <Outlet />
       </AuthGate>
     </AuthProvider>
   )
