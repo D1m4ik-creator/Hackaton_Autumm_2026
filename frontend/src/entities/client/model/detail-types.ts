@@ -3,6 +3,9 @@ import type { Client } from './types'
 export interface ClientRiskReason {
   id: string
   title: string
+  description: string
+  contribution: number
+  tone: 'accent' | 'strong' | 'muted' | 'subtle'
 }
 
 export interface ClientService {

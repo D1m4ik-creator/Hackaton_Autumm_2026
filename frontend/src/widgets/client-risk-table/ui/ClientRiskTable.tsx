@@ -9,7 +9,7 @@ import type { Client } from '../../../entities/client'
 import { useClientFiltersStore } from '../../../features/filter-clients'
 import type { ClientSortField } from '../../../features/filter-clients'
 import { clientDetailPath } from '../../../shared/lib/app-paths'
-import { formatEuroCents } from '../../../shared/lib/format'
+import { formatEuro, formatEuroCents } from '../../../shared/lib/format'
 import './client-risk-table.css'
 
 export function ClientRiskTable() {
@@ -56,6 +56,7 @@ export function ClientRiskTable() {
       </div> },
     { ...sortable('balance'), title: 'БАЛАНС', dataIndex: 'balanceCents', width: 144, align: 'center', render: formatEuroCents },
     { ...sortable('totalReplenished'), title: 'ПОПОЛНЕНИЯ', dataIndex: 'totalReplenishedCents', width: 160, align: 'center', render: formatEuroCents },
+    { ...sortable('expectedLossCents'), title: 'ПОТЕРИ, €', dataIndex: 'revenueAtRisk', width: 140, align: 'center', render: formatEuro },
     { ...sortable('riskScore'), title: 'RISK', dataIndex: 'score', align: 'right', className: 'client-risk-column', render: (_, client) => <ClientRiskIndicator client={client} /> },
   ]
 
@@ -78,7 +79,7 @@ export function ClientRiskTable() {
         showSorterTooltip={false}
         onChange={handleChange}
         onRow={(client) => ({ onClick: () => openClient(client) })}
-        scroll={{ x: 900 }}
+        scroll={{ x: 1040 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Нет клиентов с выбранным уровнем риска" /> }}
       />
       <span className="visually-hidden" role="status" aria-live="polite">Показано клиентов: {data?.items.length ?? 0} из {data?.total ?? 0}</span>

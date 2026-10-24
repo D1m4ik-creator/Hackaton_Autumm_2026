@@ -68,6 +68,10 @@ async def get_churn_trend(session: AsyncSession, weeks_back: int = 8, weeks_forw
     buckets: dict[datetime, dict[str, int]] = defaultdict(lambda: {"expired": 0, "churned": 0})
     for owner_id, expires_at, status, auto_prolong in services:
         bucket_start = _week_start(expires_at)
+        if bucket_start >= current_week and status not in RENEWED_STATUSES:
+            # Уже удалённая/заблокированная услуга с будущим сроком: отток случился раньше,
+            # в прогноз будущего непродления её не включаем
+            continue
         bucket = buckets[bucket_start]
         bucket["expired"] += 1
 
@@ -75,10 +79,6 @@ async def get_churn_trend(session: AsyncSession, weeks_back: int = 8, weeks_forw
             # Факт: период уже прошёл, смотрим на реальный текущий статус
             if status not in RENEWED_STATUSES:
                 bucket["churned"] += 1
-        elif status not in RENEWED_STATUSES:
-            # Досрочно ушла ещё до наступления «будущего» периода — это уже факт,
-            # не прогноз, даже если период попадает в будущее окно
-            bucket["churned"] += 1
         else:
             # Прогноз: ещё активна, решение о продлении впереди
             predicted_churn = (not auto_prolong) or (risk_levels.get(owner_id) == "high")

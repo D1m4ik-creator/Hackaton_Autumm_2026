@@ -22,6 +22,9 @@ SORT_COLUMNS = {
 _level_expr = func.coalesce(RiskResult.level, "no_data")
 
 
+BIGINT_MAX = 2**63 - 1
+
+
 def _escape_like(value: str) -> str:
     """Экранирует спецсимволы LIKE, чтобы подстрока искалась буквально"""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -37,7 +40,7 @@ def _conditions(levels: Sequence[str] | None, search: str | None) -> list:
         term = search.strip().replace("\x00", "")
         email_cond = Account.email.ilike(f"%{_escape_like(term)}%", escape="\\")
         # Только ASCII-цифры в пределах BIGINT -> дополнительно точное совпадение по id
-        if term.isascii() and term.isdigit() and len(term) <= 18:
+        if term.isascii() and term.isdigit() and int(term) <= BIGINT_MAX:
             conds.append(or_(email_cond, Account.id == int(term)))
         else:
             conds.append(email_cond)

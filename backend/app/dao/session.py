@@ -28,12 +28,6 @@ class SessionsDAO(BaseDAO):
         return rotated
 
     @classmethod
-    async def delete_by_login(cls, session: AsyncSession, login: str):
-        """Закрывает все сессии пользователя"""
-        await session.execute(delete(cls.model).where(cls.model.login == login))
-        await session.commit()
-
-    @classmethod
     async def delete_by_login_no_commit(cls, session: AsyncSession, login: str):
         """Закрывает все сессии пользователя без commit (коммит делает crud в общей транзакции)"""
         await session.execute(delete(cls.model).where(cls.model.login == login))
