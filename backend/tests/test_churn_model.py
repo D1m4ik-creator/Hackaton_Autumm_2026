@@ -387,3 +387,39 @@ def test_customer_value_is_zero_weight_by_default_in_adapter() -> None:
     from app.analysis.churn import default_settings
 
     assert default_settings()["weights"]["customer_value"] == 0.0
+
+
+def test_extract_features_with_extra_features_adds_custom_code() -> None:
+    """extra_features добавляет пользовательскую метрику к встроенным, не трогая их."""
+    from app.ml.features import FEATURE_REGISTRY
+    from app.ml.features.custom import make_custom_feature
+
+    custom = make_custom_feature("big_spender", "Крупный плательщик", "total_replenished > 300000")
+    customer = {"balance": 100, "services": [], "transactions": [], "totalReplenished": 500_000}
+
+    without = extract_features(customer, _config(), now=NOW)
+    with_extra = extract_features(customer, _config(), now=NOW, extra_features=[custom])
+
+    assert set(with_extra.keys()) == {f.code for f in FEATURE_REGISTRY} | {"big_spender"}
+    assert with_extra["big_spender"] == 1.0
+    # Встроенные признаки не меняются при добавлении кастомного.
+    for code in without:
+        assert with_extra[code] == without[code]
+
+
+def test_predict_with_extra_features_changes_score_with_weight() -> None:
+    """Кастомная метрика с ненулевым весом реально влияет на итоговый score."""
+    from app.ml.features.custom import make_custom_feature
+
+    custom = make_custom_feature("big_spender", "Крупный плательщик", "total_replenished > 300000")
+    customer = {"balance": 100, "services": [], "transactions": [{"status": "performed"}], "totalReplenished": 500_000}
+
+    zero_weight = _config({**WEIGHTS, "big_spender": 0.0})
+    high_weight = _config({**WEIGHTS, "big_spender": 10.0})
+
+    _, _, zero_explanation = predict_churn_score_with_explanation(customer, zero_weight, now=NOW, extra_features=[custom])
+    high_score, _, high_explanation = predict_churn_score_with_explanation(customer, high_weight, now=NOW, extra_features=[custom])
+
+    assert zero_explanation["features"]["big_spender"] == 1.0
+    assert high_explanation["contributions"]["big_spender"] == pytest.approx(10.0)
+    assert high_score is not None

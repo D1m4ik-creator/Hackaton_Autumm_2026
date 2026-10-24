@@ -2,7 +2,7 @@ import { Alert, App, Button, ConfigProvider, Input, InputNumber, Popconfirm, Sli
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
-import { deleteModelWeight, getModelSettings, patchModelSettings } from '../../../api/model-settings'
+import { deleteCustomFeature, deleteModelWeight, getModelSettings, patchModelSettings } from '../../../api/model-settings'
 import { useApiResource } from '../../../api/useApiResource'
 import { useEventsStore } from '../../../api/events'
 import { formatDateTime } from '../../../shared/lib/format'
@@ -17,6 +17,15 @@ const sliderTheme = { components: { Slider: { railSize: 6, handleSize: 18, handl
 // Реальные веса — коэффициенты логрегрессии (app/ml/churn_model.py), не доли
 // 0..1: диапазон слайдера даёт запас сверх текущих дефолтов (±3) для подбора.
 const WEIGHT_RANGE = { min: -5, max: 5, step: 0.1 }
+// Код метрики — как имя переменной Python (backend/app/analysis/churn.py: _CUSTOM_CODE_PATTERN).
+const CUSTOM_CODE_PATTERN = /^[a-z][a-z0-9_]{2,40}$/
+// Переменные формулы — backend/app/ml/features/base.py: context_variables().
+const FORMULA_VARIABLES = [
+  'balance', 'bonus_balance', 'bonus_state', 'available_funds', 'prolong_wait_cost', 'upcoming_cost',
+  'expires_soon_days', 'total_services', 'active_services_count', 'prolong_wait_services_count',
+  'suspended_services_count', 'gone_services_count', 'expiring_soon_count', 'total_transactions',
+  'failed_transactions', 'total_replenished',
+].join(', ')
 
 function localDateTime(value: string | null): string {
   if (!value) return ''
@@ -34,6 +43,11 @@ export function ModelSettingsForm() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [togglingFeature, setTogglingFeature] = useState<string | null>(null)
+  const [newCode, setNewCode] = useState('')
+  const [newLabel, setNewLabel] = useState('')
+  const [newFormula, setNewFormula] = useState('')
+  const [creatingFeature, setCreatingFeature] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const saved = data ? readModelSettings(data.settings, data.defaults) : null
   const value = draft?.value ?? saved
@@ -99,6 +113,46 @@ export function ModelSettingsForm() {
     } finally { setTogglingFeature(null) }
   }
 
+  // Пользовательская метрика по формуле — отдельный запрос (PATCH сразу
+  // customFeatures + вес 0), а не часть черновика формы: это новый признак
+  // модели, а не правка значения, см. removeFeature/restoreFeature выше.
+  async function removeCustomFeature(code: string, label: string) {
+    if (readOnly || togglingFeature) return
+    setTogglingFeature(code)
+    try {
+      const response = await deleteCustomFeature(code)
+      setData(response)
+      setDraft(null)
+      useEventsStore.getState().invalidate()
+      message.success(`Метрика «${label}» удалена`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Не удалось удалить метрику')
+    } finally { setTogglingFeature(null) }
+  }
+
+  async function createCustomFeature() {
+    if (readOnly || creatingFeature || !value) return
+    const code = newCode.trim()
+    const label = newLabel.trim()
+    const formula = newFormula.trim()
+    if (!CUSTOM_CODE_PATTERN.test(code)) { setCreateError('Код: латиница в нижнем регистре, цифры и _, начинается с буквы, длина 3-41'); return }
+    if (value.weights[code] !== undefined || MODEL_FEATURES.some((f) => f.code === code)) { setCreateError(`Код «${code}» уже используется`); return }
+    if (!label) { setCreateError('Укажите название метрики'); return }
+    if (!formula) { setCreateError('Укажите формулу'); return }
+    setCreatingFeature(true)
+    setCreateError(null)
+    try {
+      const response = await patchModelSettings({ customFeatures: { [code]: { label, formula } }, weights: { [code]: 0 } })
+      setData(response)
+      setDraft(null)
+      useEventsStore.getState().invalidate()
+      setNewCode(''); setNewLabel(''); setNewFormula('')
+      message.success(`Метрика «${label}» добавлена`)
+    } catch (error) {
+      setCreateError(error instanceof Error ? error.message : 'Не удалось добавить метрику')
+    } finally { setCreatingFeature(false) }
+  }
+
   if (!data || !value) return error
     ? <Alert type="error" title={error} action={<Button onClick={reload}>Повторить</Button>} />
     : <Spin />
@@ -145,6 +199,45 @@ export function ModelSettingsForm() {
             </div>
             <p className="model-settings-weights__note">Веса — коэффициенты логистической регрессии: чем больше по модулю, тем сильнее признак двигает оценку. Отрицательные значения снижают риск.</p>
           </div>
+        </section>
+        <section className="model-settings-card model-settings-custom-features" aria-labelledby="model-custom-features-title">
+          <h2 id="model-custom-features-title">Пользовательские метрики</h2>
+          <div className="model-settings-weights__list">
+            {Object.entries(value.customFeatures).map(([code, spec], index) => {
+              const color = weightColors[Math.min(MODEL_FEATURES.length + index, weightColors.length - 1)]
+              const isToggling = togglingFeature === code
+              const toggleDisabled = readOnly || (togglingFeature !== null && !isToggling)
+              const weight = value.weights[code] ?? 0
+              return <div className="model-weight" key={code} style={{ '--weight-color': color } as CSSProperties}>
+                <div className="model-weight__header">
+                  <label id={`weight-label-${code}`} htmlFor={`weight-${code}`}>{spec.label}</label>
+                  <div className="model-weight__actions">
+                    <InputNumber<number> id={`weight-${code}`} aria-label={`Вес: ${spec.label}`} min={WEIGHT_RANGE.min} max={WEIGHT_RANGE.max} precision={1} step={WEIGHT_RANGE.step} controls={false} value={weight} disabled={saving || readOnly} onChange={(next) => setWeight(code, next ?? 0)} />
+                    {!readOnly && <Popconfirm title={`Удалить метрику «${spec.label}»?`} okText="Удалить" cancelText="Отмена" onConfirm={() => removeCustomFeature(code, spec.label)}>
+                      <Button className="model-weight__remove" type="text" htmlType="button" icon={<DeleteOutlined />} aria-label={`Удалить метрику: ${spec.label}`} title="Удалить метрику" loading={isToggling} disabled={toggleDisabled} />
+                    </Popconfirm>}
+                  </div>
+                </div>
+                <p className="model-weight__hint model-weight__formula"><code>{spec.formula}</code></p>
+                <Slider className="model-weight__slider" min={WEIGHT_RANGE.min} max={WEIGHT_RANGE.max} step={WEIGHT_RANGE.step} value={weight} disabled={saving || readOnly} onChange={(next) => setWeight(code, next)} ariaLabelledByForHandle={`weight-label-${code}`} tooltip={{ formatter: (next) => next?.toFixed(1) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
+              </div>
+            })}
+            {Object.keys(value.customFeatures).length === 0 && <p className="model-settings-save-note">Пользовательских метрик пока нет.</p>}
+          </div>
+          {!readOnly && <div className="model-custom-feature-create">
+            <h3>Добавить метрику</h3>
+            <div className="model-custom-feature-create__fields">
+              <label htmlFor="custom-feature-code">Код (латиницей)</label>
+              <Input id="custom-feature-code" value={newCode} onChange={(event) => setNewCode(event.target.value)} placeholder="big_spender" disabled={creatingFeature} />
+              <label htmlFor="custom-feature-label">Название</label>
+              <Input id="custom-feature-label" value={newLabel} onChange={(event) => setNewLabel(event.target.value)} placeholder="Крупный плательщик" disabled={creatingFeature} />
+              <label htmlFor="custom-feature-formula">Формула</label>
+              <Input.TextArea id="custom-feature-formula" value={newFormula} onChange={(event) => setNewFormula(event.target.value)} placeholder="total_replenished > 300000" rows={3} disabled={creatingFeature} />
+              <p className="model-settings-save-note">Переменные: {FORMULA_VARIABLES}. Функции: min, max, abs.</p>
+            </div>
+            <Button htmlType="button" loading={creatingFeature} onClick={() => createCustomFeature()}>Добавить метрику</Button>
+            {createError && <Alert className="model-settings-error" type="error" showIcon title={createError} role="alert" />}
+          </div>}
         </section>
         <section className="model-settings-card model-settings-thresholds" aria-labelledby="model-thresholds-title">
           <h2 id="model-thresholds-title">Пороги и параметры</h2>

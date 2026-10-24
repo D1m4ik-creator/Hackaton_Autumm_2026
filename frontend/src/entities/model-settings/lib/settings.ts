@@ -10,14 +10,26 @@ function toNumber(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
+function readCustomFeatures(settings: Record<string, unknown>): Record<string, { label: string; formula: string }> {
+  const raw = record(settings.customFeatures)
+  const result: Record<string, { label: string; formula: string }> = {}
+  for (const [code, spec] of Object.entries(raw)) {
+    const { label, formula } = record(spec)
+    if (typeof label === 'string' && typeof formula === 'string') result[code] = { label, formula }
+  }
+  return result
+}
+
 export function readModelSettings(settings: Record<string, unknown>, defaults: Record<string, unknown>): ModelSettings {
   // settings.weights — уже эффективные веса (дефолты + правки пользователя),
   // кроме явно удалённых: их там нет вообще (backend/app/crud/recalc.py:
   // apply_removals), это и отличает «удалён» от «используется дефолт».
   const settingsWeights = record(settings.weights)
+  const customFeatures = readCustomFeatures(settings)
+  const codes = [...MODEL_FEATURES.map(({ code }) => code), ...Object.keys(customFeatures)]
   const weights: Record<string, number> = {}
   const removed: string[] = []
-  for (const { code } of MODEL_FEATURES) {
+  for (const code of codes) {
     if (Object.hasOwn(settingsWeights, code)) {
       weights[code] = toNumber(settingsWeights[code], defaultModelSettings.weights[code] ?? 0)
     } else {
@@ -31,6 +43,7 @@ export function readModelSettings(settings: Record<string, unknown>, defaults: R
   return {
     weights,
     removed,
+    customFeatures,
     bias: toNumber(settings.bias, toNumber(defaults.bias, defaultModelSettings.bias)),
     thresholds: {
       high: typeof thresholds.high === 'number' ? thresholds.high : defaultModelSettings.thresholds.high,
@@ -43,7 +56,8 @@ export function readModelSettings(settings: Record<string, unknown>, defaults: R
 }
 
 export function validateModelSettings(settings: ModelSettings): string | null {
-  if (MODEL_FEATURES.some(({ code }) => !settings.removed.includes(code) && !Number.isFinite(settings.weights[code]))) return 'Все веса признаков должны быть числами.'
+  const codes = [...MODEL_FEATURES.map(({ code }) => code), ...Object.keys(settings.customFeatures)]
+  if (codes.some((code) => !settings.removed.includes(code) && !Number.isFinite(settings.weights[code]))) return 'Все веса признаков должны быть числами.'
   if (!Number.isFinite(settings.bias)) return 'Смещение (bias) должно быть числом.'
   const { high, medium } = settings.thresholds
   if (![high, medium].every((value) => Number.isInteger(value) && value >= 0 && value <= 100)) return 'Пороги должны быть целыми числами от 0 до 100.'

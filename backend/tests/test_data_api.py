@@ -210,6 +210,45 @@ async def test_delete_model_setting(loaded: AsyncClient):
     assert feature in (await loaded.get("/api/v1/model/settings")).json()["settings"]["weights"]
 
 
+async def test_custom_feature_create_weight_delete_cycle(loaded: AsyncClient):
+    # Клиент 5 реально пополнял счёт (см. test_analysis_adapter) — подходит для проверки веса.
+    create = await loaded.patch("/api/v1/model/settings", json={
+        "customFeatures": {"big_spender": {"label": "Крупный плательщик", "formula": "total_replenished > 1"}},
+        "weights": {"big_spender": 0},
+    })
+    assert create.status_code == 200
+    settings = create.json()["settings"]
+    assert settings["customFeatures"]["big_spender"]["formula"] == "total_replenished > 1"
+    before_score = next(c["riskScore"] for c in (await loaded.get("/api/v1/customers")).json()["items"] if c["id"] == 5)
+
+    raised = await loaded.patch("/api/v1/model/settings", json={"weights": {"big_spender": 10}})
+    assert raised.status_code == 200
+    after_score = next(c["riskScore"] for c in (await loaded.get("/api/v1/customers")).json()["items"] if c["id"] == 5)
+    assert after_score > before_score
+
+    deleted = await loaded.delete("/api/v1/model/settings/customFeatures/big_spender")
+    assert deleted.status_code == 200
+    assert "big_spender" not in deleted.json()["settings"]["customFeatures"]
+    restored_score = next(c["riskScore"] for c in (await loaded.get("/api/v1/customers")).json()["items"] if c["id"] == 5)
+    assert restored_score == before_score
+
+
+async def test_custom_feature_rejects_malicious_formula(loaded: AsyncClient):
+    response = await loaded.patch("/api/v1/model/settings", json={
+        "customFeatures": {"evil": {"label": "evil", "formula": "__import__('os').system('id')"}},
+    })
+    assert response.status_code == 422
+    settings = (await loaded.get("/api/v1/model/settings")).json()["settings"]
+    assert "evil" not in settings.get("customFeatures", {})
+
+
+async def test_custom_feature_rejects_reserved_code(loaded: AsyncClient):
+    response = await loaded.patch("/api/v1/model/settings", json={
+        "customFeatures": {"has_prolong_wait": {"label": "x", "formula": "1"}},
+    })
+    assert response.status_code == 422
+
+
 async def test_delete_model_setting_requires_admin(client: AsyncClient):
     assert (await client.delete("/api/v1/model/settings/weights/x")).status_code == 401
     assert (await client.post("/api/v1/auth/login", json=ADMIN)).status_code == 200

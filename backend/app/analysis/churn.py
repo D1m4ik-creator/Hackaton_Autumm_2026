@@ -36,6 +36,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -53,6 +54,12 @@ from app.ml.churn_model import (
     predict_churn_score_with_explanation,
 )
 from app.ml.features import FEATURE_REGISTRY
+from app.ml.features.custom import make_custom_feature, validate_formula
+
+# Коды пользовательских метрик: как имена переменных Python, не пересекаются
+# с кодами встроенных признаков (зарезервированы).
+_CUSTOM_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,40}$")
+_BUILTIN_CODES = frozenset(feature.code for feature in FEATURE_REGISTRY)
 
 # Веса и тексты причин по умолчанию выводятся из реестра признаков
 # (app/ml/features) — у каждого Feature вес и текст объяснения уже заданы
@@ -126,6 +133,7 @@ def default_settings() -> dict:
         "thresholds": dict(_DEFAULT_THRESHOLDS),
         "expiresSoonDays": DEFAULT_EXPIRES_SOON_DAYS,
         "horizonDays": _DEFAULT_HORIZON_DAYS,
+        "customFeatures": {},
     }
 
 
@@ -201,22 +209,47 @@ def validate_settings(data: dict) -> dict:
             raise ValueError("horizonDays должен быть целым числом от 1 до 3650")
         result["horizonDays"] = value
 
+    if "customFeatures" in data:
+        custom_features = data["customFeatures"]
+        if not isinstance(custom_features, dict):
+            raise ValueError("customFeatures должен быть объектом {код метрики: {label, formula}}")
+        normalized_custom: dict[str, dict[str, str]] = {}
+        for code, spec in custom_features.items():
+            if not isinstance(code, str) or not _CUSTOM_CODE_PATTERN.match(code):
+                raise ValueError(
+                    f"код метрики {code!r} должен состоять из латиницы в нижнем регистре, "
+                    "цифр и подчёркиваний, начинаться с буквы, длина 3-41 символ"
+                )
+            if code in _BUILTIN_CODES:
+                raise ValueError(f"код метрики {code!r} зарезервирован встроенным признаком")
+            if not isinstance(spec, dict):
+                raise ValueError(f"метрика {code!r} должна быть объектом {{label, formula}}")
+            label = spec.get("label")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError(f"метрика {code!r}: label должен быть непустой строкой")
+            formula = spec.get("formula")
+            if not isinstance(formula, str) or not formula.strip():
+                raise ValueError(f"метрика {code!r}: formula должна быть непустой строкой")
+            validate_formula(formula)
+            normalized_custom[code] = {"label": label, "formula": formula}
+        result["customFeatures"] = normalized_custom
+
     return result
 
 
-def _reason_text(name: str) -> str:
+def _reason_text(name: str, reason_texts: dict[str, str]) -> str:
     """Текст причины по имени признака; для неизвестного — «Признак «имя»»."""
-    return _REASON_TEXTS.get(name, f"Признак «{name}»")
+    return reason_texts.get(name, f"Признак «{name}»")
 
 
-def _build_reasons(contributions: dict[str, float]) -> list[Reason]:
+def _build_reasons(contributions: dict[str, float], reason_texts: dict[str, str]) -> list[Reason]:
     """Причины: положительные вклады по убыванию, максимум 3."""
     positive = sorted(
         ((name, value) for name, value in contributions.items() if value > 0),
         key=lambda item: item[1],
         reverse=True,
     )
-    reasons = [Reason(name, _reason_text(name)) for name, _ in positive[:3]]
+    reasons = [Reason(name, _reason_text(name, reason_texts)) for name, _ in positive[:3]]
     if not reasons:
         return [Reason("no_risk_signals", "Тревожных сигналов не найдено")]
     return reasons
@@ -264,6 +297,16 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
         expires_soon_days=int(expires_soon_days),
     )
 
+    # Пользовательские метрики по формуле (admin/superadmin, см.
+    # app/ml/features/custom.py) — считаются наравне со встроенными, их
+    # тексты причин объединяем с дефолтными локально для этого вызова.
+    custom_specs = settings.get("customFeatures") or {}
+    extra_features = [
+        make_custom_feature(code, spec["label"], spec["formula"])
+        for code, spec in custom_specs.items()
+    ]
+    reason_texts = {**_REASON_TEXTS, **{code: spec["label"] for code, spec in custom_specs.items()}}
+
     # Группировка без N+1: услуги по владельцу, транзакции по владельцу услуги.
     services_by_owner: dict[int, list[ServiceData]] = defaultdict(list)
     service_owner: dict[int, int] = {}
@@ -307,7 +350,7 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
         }
 
         score, probability, explanation = predict_churn_score_with_explanation(
-            customer, config, now=as_of
+            customer, config, now=as_of, extra_features=extra_features
         )
 
         live_services = sum(
@@ -355,7 +398,7 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
                 account_id=account.id,
                 score=score,
                 level=level,
-                reasons=_build_reasons(contributions),
+                reasons=_build_reasons(contributions, reason_texts),
                 expected_loss_cents=_expected_loss_cents(
                     account_services, probability, horizon_days
                 ),

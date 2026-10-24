@@ -18,6 +18,7 @@ export const defaultModelSettings: ModelSettings = {
     customer_value: 0,
   },
   removed: [],
+  customFeatures: {},
   bias: -2.5,
   thresholds: { high: 70, medium: 35 },
   expiresSoonDays: 7,

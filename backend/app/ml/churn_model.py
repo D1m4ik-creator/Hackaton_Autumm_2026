@@ -21,9 +21,9 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Sequence
 
-from app.ml.features import FEATURE_REGISTRY, build_context
+from app.ml.features import FEATURE_REGISTRY, Feature, build_context
 
 # Статусы услуг, которые считаются «живыми» и участвуют в оценке
 # будущего оттока. deleted/blocked — уже свершившийся факт, они
@@ -94,6 +94,7 @@ def extract_features(
     customer: dict[str, Any],
     config: ModelConfig,
     now: datetime | None = None,
+    extra_features: Sequence[Feature] = (),
 ) -> dict[str, float]:
     """Извлекает признаки из снапшота клиента через реестр (app/ml/features).
 
@@ -106,12 +107,15 @@ def extract_features(
         config: Конфигурация модели (нужен параметр expires_soon_days).
         now: Момент времени «сейчас»; по умолчанию — текущее UTC-время.
             Параметр вынесен для детерминированного тестирования.
+        extra_features: Пользовательские метрики по формуле (admin/superadmin,
+            см. app/ml/features/custom.py) — считаются наравне со встроенными,
+            по умолчанию пустой список, существующие вызовы не затронуты.
 
     Returns:
         Словарь «код признака -> значение».
     """
     ctx = build_context(customer, config.expires_soon_days, now)
-    return {feature.code: feature.value(ctx) for feature in FEATURE_REGISTRY}
+    return {feature.code: feature.value(ctx) for feature in (*FEATURE_REGISTRY, *extra_features)}
 
 
 def _is_insufficient_data(customer: dict[str, Any]) -> bool:
@@ -127,6 +131,7 @@ def predict_churn_score_with_explanation(
     customer: dict[str, Any],
     config: ModelConfig,
     now: datetime | None = None,
+    extra_features: Sequence[Feature] = (),
 ) -> tuple[int | None, float, dict[str, Any]]:
     """Оценивает риск оттока и возвращает разбор вкладов признаков.
 
@@ -134,6 +139,7 @@ def predict_churn_score_with_explanation(
         customer: JSON-снапшот клиента.
         config: Конфигурация модели с заданными пользователем весами.
         now: Момент «сейчас» (для тестов); по умолчанию текущее UTC-время.
+        extra_features: Пользовательские метрики по формуле, см. extract_features.
 
     Returns:
         Кортеж (оценка, вероятность, объяснение), где:
@@ -155,7 +161,7 @@ def predict_churn_score_with_explanation(
             "insufficient_data": True,
         }
 
-    features = extract_features(customer, config, now=now)
+    features = extract_features(customer, config, now=now, extra_features=extra_features)
 
     contributions: dict[str, float] = {}
     logit = config.bias

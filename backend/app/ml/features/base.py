@@ -137,3 +137,49 @@ def build_context(
         expiring_soon=expiring_soon,
         upcoming_cost=upcoming_cost,
     )
+
+
+def context_variables(ctx: CustomerContext) -> dict[str, float]:
+    """Плоский безопасный набор чисел для формул пользовательских метрик.
+
+    Те же величины, что уже использует встроенный реестр признаков, но
+    явно поимённые скаляры — без доступа к сырым спискам/объектам клиента.
+    """
+    return {
+        "balance": ctx.balance,
+        "bonus_balance": ctx.bonus_balance,
+        "bonus_state": 1.0 if ctx.bonus_state else 0.0,
+        "available_funds": ctx.available_funds,
+        "prolong_wait_cost": ctx.prolong_wait_cost,
+        "upcoming_cost": ctx.upcoming_cost,
+        "expires_soon_days": float(ctx.expires_soon_days),
+        "total_services": float(len(ctx.services)),
+        "active_services_count": float(len(ctx.active_services)),
+        "prolong_wait_services_count": float(len(ctx.prolong_wait_services)),
+        "suspended_services_count": float(len(ctx.suspended_services)),
+        "gone_services_count": float(len(ctx.gone_services)),
+        "expiring_soon_count": float(len(ctx.expiring_soon)),
+        "total_transactions": float(len(ctx.transactions)),
+        "failed_transactions": float(sum(1 for t in ctx.transactions if t.get("status") == "not_performed")),
+        "total_replenished": float(ctx.customer.get("totalReplenished") or 0),
+    }
+
+
+CONTEXT_VARIABLE_NAMES: tuple[str, ...] = (
+    "balance",
+    "bonus_balance",
+    "bonus_state",
+    "available_funds",
+    "prolong_wait_cost",
+    "upcoming_cost",
+    "expires_soon_days",
+    "total_services",
+    "active_services_count",
+    "prolong_wait_services_count",
+    "suspended_services_count",
+    "gone_services_count",
+    "expiring_soon_count",
+    "total_transactions",
+    "failed_transactions",
+    "total_replenished",
+)
