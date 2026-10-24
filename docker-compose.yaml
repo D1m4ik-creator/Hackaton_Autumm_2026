@@ -9,11 +9,8 @@ services:
       # 5433 на хосте, чтобы не конфликтовать с локально установленным PostgreSQL
       - "${POSTGRES_PORT:-5433}:5432"
     volumes:
+      # Схему создаёт Alembic при старте api, данные грузит само приложение из origin_data
       - pgdata:/var/lib/postgresql/data
-      # Скрипты выполняются при первом запуске (на пустом volume) в алфавитном порядке:
-      # сначала схема, затем загрузка данных (10 аккаунтов, 30 услуг, 100 транзакций)
-      - ./origin_data/001_schema.up.sql:/docker-entrypoint-initdb.d/001_schema.up.sql:ro
-      - ./origin_data/002_seed.sql:/docker-entrypoint-initdb.d/002_seed.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -29,6 +26,10 @@ services:
       # Внутри сети compose база доступна по имени сервиса
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
+      # Исходный снимок (10 аккаунтов, 30 услуг, 100 транзакций): при старте грузится в пустую базу
+      SOURCE_DATA_PATH: /data/data.json
+    volumes:
+      - ./origin_data:/data:ro
     ports:
       - "8000:8000"
     depends_on:
