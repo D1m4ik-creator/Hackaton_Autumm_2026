@@ -6,8 +6,8 @@ import { useModelSettingsStore } from '../model/store'
 import { AddModelFeatureModal } from './AddModelFeatureModal'
 import './model-settings-form.css'
 
-const weightColors = ['#121110', '#55534f', '#7a7875', '#a8a5a1']
-const sliderTheme = { components: { Slider: { railSize: 6, handleSize: 18, handleSizeHover: 18, handleLineWidth: 0, handleLineWidthHover: 0, railBg: '#e4e2df', railHoverBg: '#e4e2df' } } }
+const weightColors = ['var(--dashboard-accent-bright)', 'var(--dashboard-text)', 'var(--dashboard-ring-medium)', 'var(--dashboard-muted)']
+const sliderTheme = { components: { Slider: { railSize: 6, handleSize: 18, handleSizeHover: 18, handleLineWidth: 0, handleLineWidthHover: 0, railBg: 'var(--dashboard-ring-track)', railHoverBg: 'var(--dashboard-ring-track)' } } }
 
 export function ModelSettingsForm() {
   const { draft, error, setWeight, setThreshold, save } = useModelSettingsStore()
@@ -38,7 +38,7 @@ export function ModelSettingsForm() {
                     <label id={`weight-label-${feature.id}`} htmlFor={`weight-${feature.id}`}>{feature.name}</label>
                     <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} onChange={(value) => setWeight(feature.id, value ?? 0)} />
                   </div>
-                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} onChange={(value) => setWeight(feature.id, value)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (value) => value?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: '#e4e2df', borderRadius: 0 } }} />
+                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} onChange={(value) => setWeight(feature.id, value)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (value) => value?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
                 </div>
               })}
             </div>

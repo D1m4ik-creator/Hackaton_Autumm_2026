@@ -1,7 +1,7 @@
 .top-clients-page .dashboard-main { padding-right: 48px; }
 .top-clients-heading { margin-bottom: 30px; }
 .top-clients-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
-.top-clients-heading p { margin-top: 5px; color: #7a7875; font-size: 13px; line-height: 16px; }
+.top-clients-heading p { margin-top: 5px; color: var(--dashboard-muted); font-size: 13px; line-height: 16px; }
 .top-clients-page .client-risk-filters { margin-bottom: 20px; }
 
 @media (max-width: 1279px) { .top-clients-page .dashboard-main { padding-right: 32px; } }

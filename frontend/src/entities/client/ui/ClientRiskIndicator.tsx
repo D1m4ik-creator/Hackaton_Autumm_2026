@@ -11,7 +11,7 @@ export function ClientRiskIndicator({ client }: { client: Client }) {
   return (
     <Tooltip title={label}>
       <span className="client-risk-indicator" role="img" aria-label={label} tabIndex={0}>
-        <Progress type="circle" percent={client.score} size={26} strokeWidth={19.23} strokeColor={riskColors[client.risk]} railColor="#ebebeb" strokeLinecap="butt" showInfo={false} />
+        <Progress type="circle" percent={client.score} size={40} strokeWidth={9} strokeColor={riskColors[client.risk]} railColor="var(--dashboard-ring-track)" strokeLinecap="round" />
       </span>
     </Tooltip>
   )
