@@ -1,4 +1,5 @@
 import { Alert, App, Button, ConfigProvider, Input, InputNumber, Slider, Spin } from 'antd'
+import { DeleteOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
 import { getModelSettings, patchModelSettings } from '../../../api/model-settings'
@@ -80,7 +81,10 @@ export function ModelSettingsForm() {
                 return <div className="model-weight" key={feature.id} style={{ '--weight-color': color } as CSSProperties}>
                   <div className="model-weight__header">
                     <label id={`weight-label-${feature.id}`} htmlFor={`weight-${feature.id}`}>{feature.name}</label>
-                    <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight ?? 0)} />
+                    <div className="model-weight__actions">
+                      <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight ?? 0)} />
+                      {!readOnly && <Button className="model-weight__remove" type="text" htmlType="button" icon={<DeleteOutlined />} aria-label={`Удалить признак: ${feature.name}`} title="Удалить признак" disabled={saving} onClick={() => edit((settings) => ({ ...settings, features: settings.features.filter((item) => item.id !== feature.id) }))} />}
+                    </div>
                   </div>
                   <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (weight) => weight?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
                 </div>

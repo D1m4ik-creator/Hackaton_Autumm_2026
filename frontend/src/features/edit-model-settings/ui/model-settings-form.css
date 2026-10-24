@@ -8,7 +8,10 @@
 .model-weight { min-height: 76px; }
 .model-weight__header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 32px; }
 .model-weight__header label { font-size: 14px; font-weight: 600; line-height: 17px; }
-.model-weight__header .ant-input-number { flex: 0 0 76px; width: 76px; height: 32px; border-color: var(--dashboard-border); border-radius: 8px; background: var(--dashboard-hover); }
+.model-weight__actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
+.model-weight__remove.ant-btn { width: 28px; height: 28px; padding: 0; color: var(--dashboard-muted); }
+.model-weight__remove.ant-btn:not(:disabled):hover { background: var(--dashboard-hover); color: var(--dashboard-accent-bright); }
+.model-weight__header .ant-input-number { flex: 0 0 76px; width: 76px; height: 32px; padding-inline: 0; border-color: var(--dashboard-border); border-radius: 8px; background: var(--dashboard-hover); }
 .model-weight__header .ant-input-number-input { height: 30px; padding: 0 8px; text-align: center; font-size: 13px; font-weight: 700; line-height: 16px; }
 .model-weight__slider.ant-slider { height: 18px; margin: 6px 0 0; padding: 6px 0; }
 .model-weight__slider.ant-slider .ant-slider-rail, .model-weight__slider.ant-slider .ant-slider-track { height: 6px; }
