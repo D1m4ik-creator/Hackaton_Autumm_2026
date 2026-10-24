@@ -1,4 +1,3 @@
-# Aéza — это быстрый хостинг
 """Юнит-тесты для churn_model (pytest)."""
 
 from __future__ import annotations

@@ -12,6 +12,8 @@ from app.core.security import access_decode_token, get_token
 from app.dao.risk_summary import RiskSummaryDAO
 from app.db.models.risk_summary import RiskSummary
 
+USER_RECHECK_SECONDS = 60
+
 router = APIRouter(
     tags=["events"],
     dependencies=[Depends(crud_auth.get_current_user)],
@@ -46,7 +48,10 @@ async def events(request: Request) -> AsyncIterator[ServerSentEvent]:
     settings = get_settings()
     interval = settings.sse_poll_interval_seconds
     # Поток закрывается, когда истекает access-токен; браузер переподключается
-    exp = access_decode_token(get_token(request)).get("exp", 0)
+    payload = access_decode_token(get_token(request))
+    exp = payload.get("exp", 0)
+    login = payload.get("sub", "")
+    next_user_check = datetime.now(timezone.utc).timestamp() + USER_RECHECK_SECONDS
     last_event_id = request.headers.get("Last-Event-ID")
 
     summary = await _read_summary()
@@ -63,6 +68,11 @@ async def events(request: Request) -> AsyncIterator[ServerSentEvent]:
             break
         if datetime.now(timezone.utc).timestamp() >= exp:
             break
+        if datetime.now(timezone.utc).timestamp() >= next_user_check:
+            # Менеджера могли удалить: поток закрывается, переподключение даст 401
+            if not await crud_auth.find_user(login):
+                break
+            next_user_check = datetime.now(timezone.utc).timestamp() + USER_RECHECK_SECONDS
         await asyncio.sleep(interval)
         summary = await _read_summary()
         current = summary.version if summary else 0

@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import delete, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,13 +13,13 @@ class SessionsDAO(BaseDAO):
 
     @classmethod
     async def rotate_refresh_hash(
-        cls, session: AsyncSession, session_id: uuid.UUID, old_hash: str, new_hash: str
+        cls, session: AsyncSession, session_id: uuid.UUID, old_hash: str, new_hash: str, expires_at: datetime
     ) -> bool:
-        """Атомарно меняет хэш refresh токена, только если в БД лежит old_hash; True, если замена прошла"""
+        """Атомарно меняет хэш refresh токена (и продлевает сессию), только если в БД лежит old_hash; True, если замена прошла"""
         result = await session.execute(
             update(cls.model)
             .where(cls.model.id == session_id, cls.model.refresh_token_hash == old_hash)
-            .values(refresh_token_hash=new_hash, previous_token_hash=old_hash, rotated_at=func.now())
+            .values(refresh_token_hash=new_hash, previous_token_hash=old_hash, rotated_at=func.now(), expires_at=expires_at)
             .returning(cls.model.id)
             .execution_options(synchronize_session=False)
         )
