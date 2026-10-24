@@ -1,4 +1,4 @@
-# RETAIN — frontend
+# Aéza — frontend
 
 React, TypeScript, Vite, Ant Design и Zustand.
 

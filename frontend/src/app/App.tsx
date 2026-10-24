@@ -11,6 +11,7 @@ import { TopClientsPage } from '../pages/top-clients'
 import { ModelSettingsPage } from '../pages/model-settings'
 import { LoginPage } from '../pages/LoginPage'
 import { ManagersPage } from '../pages/managers/ManagersPage'
+import { ChurnTrendPage } from '../pages/churn-trend'
 import { subscribeToEvents, useEventsStore } from '../api/events'
 import { useRiskReportStore } from '../entities/risk-report'
 
@@ -111,6 +112,11 @@ function AuthenticatedManagers() {
   return <ManagersPage onSignOut={logout} />
 }
 
+function AuthenticatedChurnTrend() {
+  const { logout } = useAuth()
+  return <ChurnTrendPage onSignOut={logout} />
+}
+
 export default function App() {
   return (
     <Routes>
@@ -127,6 +133,7 @@ export default function App() {
           <Route path="/app/clients/:clientId" element={<ProtectedRoute><AuthenticatedClientDetail /></ProtectedRoute>} />
           <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
           <Route path="/app/users" element={<ProtectedRoute adminOnly><AuthenticatedManagers /></ProtectedRoute>} />
+          <Route path="/app/churn-trend" element={<ProtectedRoute><AuthenticatedChurnTrend /></ProtectedRoute>} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

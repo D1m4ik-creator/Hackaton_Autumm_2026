@@ -6,3 +6,5 @@ export const formatEuro = (value: number) => `€${money.format(value)}`
 export const formatEuroCents = (cents: number) => `€${(cents / 100).toFixed(2)}`
 export const formatPercent = (value: number) => `${value.toFixed(1)}%`
 export const formatDateTime = (value: string | null) => value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'
+const shortDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' })
+export const formatShortDate = (value: string) => shortDate.format(new Date(value))

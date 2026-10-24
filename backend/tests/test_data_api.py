@@ -81,9 +81,45 @@ async def test_model_settings_patch_bumps_version(loaded: AsyncClient):
 
 
 async def test_data_endpoints_require_login(client: AsyncClient):
-    for path in ("/api/v1/customers", "/api/v1/customers/1", "/api/v1/analytics/summary", "/api/v1/model/settings", "/api/v1/events"):
+    for path in ("/api/v1/customers", "/api/v1/customers/1", "/api/v1/analytics/summary", "/api/v1/analytics/churn-trend", "/api/v1/model/settings", "/api/v1/events"):
         assert (await client.get(path)).status_code == 401
     assert (await client.get("/metrics")).status_code == 200
+
+
+async def test_churn_trend_buckets_and_at_risk_count(loaded: AsyncClient):
+    response = await loaded.get("/api/v1/analytics/churn-trend?weeksBack=4&weeksForward=4")
+    assert response.status_code == 200
+    body = response.json()
+
+    buckets = body["buckets"]
+    assert len(buckets) == 9  # 4 назад + текущая + 4 вперёд
+    # Периоды идут по порядку без разрывов, по 7 дней каждый
+    for b in buckets:
+        start = datetime.fromisoformat(b["periodStart"].replace("Z", "+00:00"))
+        end = datetime.fromisoformat(b["periodEnd"].replace("Z", "+00:00"))
+        assert end - start == timedelta(days=7)
+    starts = [b["periodStart"] for b in buckets]
+    assert starts == sorted(starts)
+    # Прошлые бакеты помечены фактом, начиная с текущей недели — прогнозом
+    assert any(not b["isForecast"] for b in buckets)
+    assert any(b["isForecast"] for b in buckets)
+    forecast_started = False
+    for b in buckets:
+        if b["isForecast"]:
+            forecast_started = True
+        else:
+            assert not forecast_started, "факт не должен идти после начала прогноза"
+
+    for b in buckets:
+        assert b["churnedServices"] <= b["expiredServices"]
+        assert b["expiredServices"] >= 0
+
+    assert body["atRiskServices"] >= 0
+    assert body["generatedAt"]
+
+    # Некорректные диапазоны отклоняются
+    assert (await loaded.get("/api/v1/analytics/churn-trend?weeksBack=0")).status_code == 422
+    assert (await loaded.get("/api/v1/analytics/churn-trend?weeksForward=999")).status_code == 422
 
 
 async def test_refresh_extends_session(admin: AsyncClient, db_session):
