@@ -15,6 +15,7 @@ export const defaultModelSettings: ModelSettings = {
     deleted_blocked_ratio: 1,
     full_autoprolong_coverage: -1,
     sufficient_funds: -0.8,
+    customer_value: 0,
   },
   removed: [],
   bias: -2.5,

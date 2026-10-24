@@ -332,3 +332,58 @@ def test_invalid_config_rejected() -> None:
         ModelConfig(weights={1: 3.0})  # type: ignore[dict-item]
     with pytest.raises(ValueError):
         ModelConfig(weights=WEIGHTS, bias=float("nan"))
+
+
+def test_feature_registry_has_eleven_unique_codes_with_finite_weights() -> None:
+    """Реестр собран без опечаток: уникальные коды, конечные веса по умолчанию."""
+    from app.ml.features import FEATURE_REGISTRY
+
+    codes = [feature.code for feature in FEATURE_REGISTRY]
+    assert len(codes) == 11
+    assert len(set(codes)) == len(codes)
+    for feature in FEATURE_REGISTRY:
+        assert isinstance(feature.default_weight, float)
+        assert feature.default_weight == feature.default_weight  # не NaN
+        assert feature.reason_text
+
+
+def test_extract_features_keys_match_registry_codes() -> None:
+    """extract_features возвращает ровно те коды, что в реестре — не больше, не меньше."""
+    from app.ml.features import FEATURE_REGISTRY
+
+    customer = {"balance": 100, "services": [], "transactions": [{"status": "performed"}]}
+    features = extract_features(customer, _config(), now=NOW)
+    assert set(features.keys()) == {feature.code for feature in FEATURE_REGISTRY}
+
+
+def test_customer_value_scales_with_total_replenished_and_saturates() -> None:
+    """customer_value — линейная доля totalReplenished до насыщения в 1.0, не роняет без поля."""
+    base_services = [
+        {
+            "name": "vds-1",
+            "price": 500,
+            "status": "active",
+            "autoprolong": True,
+            "paymentTerm": "month",
+            "expiresAt": _iso(NOW + timedelta(days=60)),
+        }
+    ]
+
+    no_value = {"balance": 100, "services": base_services, "transactions": [], "totalReplenished": 0}
+    assert extract_features(no_value, _config(), now=NOW)["customer_value"] == 0.0
+
+    half = {"balance": 100, "services": base_services, "transactions": [], "totalReplenished": 100_000}
+    assert extract_features(half, _config(), now=NOW)["customer_value"] == pytest.approx(0.5)
+
+    saturated = {"balance": 100, "services": base_services, "transactions": [], "totalReplenished": 500_000}
+    assert extract_features(saturated, _config(), now=NOW)["customer_value"] == 1.0
+
+    missing_field = {"balance": 100, "services": base_services, "transactions": []}
+    assert extract_features(missing_field, _config(), now=NOW)["customer_value"] == 0.0
+
+
+def test_customer_value_is_zero_weight_by_default_in_adapter() -> None:
+    """В настройках адаптера по умолчанию customer_value не влияет на score (вес 0)."""
+    from app.analysis.churn import default_settings
+
+    assert default_settings()["weights"]["customer_value"] == 0.0

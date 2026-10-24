@@ -104,7 +104,7 @@ function buildReasons(result: CustomerCard): ClientRiskReason[] {
   }))
 }
 
-export type CustomerSort = 'id' | 'email' | 'balance' | 'totalReplenished' | 'riskScore'
+export type CustomerSort = 'id' | 'email' | 'balance' | 'totalReplenished' | 'riskScore' | 'expectedLossCents'
 export interface CustomerQuery {
   level?: RiskLevel
   search?: string

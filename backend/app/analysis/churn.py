@@ -8,10 +8,11 @@
 
 Модель — ``predict_churn_score_with_explanation``; веса ей задаёт
 пользователь через настройки (у самой модели весов по умолчанию нет).
-Экспертные веса по умолчанию живут здесь, в ``_DEFAULT_WEIGHTS``, и отдаются
-через ``default_settings()``. Адаптер готовит для модели снимок каждого
-клиента, переводит её ``score`` 0..100 в уровень ``high/medium/low``, считает
-денежную оценку потерь и собирает причины.
+Веса и тексты причин по умолчанию выводятся из реестра признаков
+``app.ml.features.FEATURE_REGISTRY`` и отдаются через ``default_settings()``.
+Адаптер готовит для модели снимок каждого клиента, переводит её ``score``
+0..100 в уровень ``high/medium/low``, считает денежную оценку потерь и
+собирает причины.
 
 Исправления на границе данных и модели (баги в данных, а не в модели):
 
@@ -20,16 +21,16 @@
 * ``bonusState`` в данных — строка ``"locked"``/``"unlocked"``, а модель делает
   ``bool(...)``; адаптер передаёт ``True`` только при ``"unlocked"``.
 
-Как добавить признак (расширяемость без правки инфраструктуры):
+Как добавить признак: создать ``Feature`` в новом файле
+``app/ml/features/<имя>.py`` (код, вес по умолчанию, текст причины, функция
+``compute(ctx) -> float в [0,1]``) и добавить его в ``FEATURE_REGISTRY``
+(``app/ml/features/__init__.py``) — вес и текст причины подхватятся сюда
+автоматически, больше ничего в адаптере или модели менять не нужно.
 
-1. вычислить признак в ``app.ml.churn_model.extract_features`` (значение в [0, 1]);
-2. добавить его вес в ``weights`` — через ``default_settings()`` или через
-   сохранённые настройки (``PATCH /model/settings``).
-
-Признак, у которого есть вес, но нет реализации в ``extract_features``, даёт
-нулевой вклад (модель берёт ``features.get(name, 0.0)``), поэтому вес можно
-завести заранее. Текст причины для нового признака добавляется в
-``_REASON_TEXTS`` ниже; для неизвестного имени показывается «Признак «имя»».
+Признак, у которого есть вес, но нет записи в реестре (например, старое имя
+после удаления файла), даёт нулевой вклад (модель берёт
+``features.get(name, 0.0)``) и не падает; для него показывается общая подпись
+«Признак «имя»» (см. ``_reason_text`` ниже).
 """
 
 from __future__ import annotations
@@ -51,44 +52,14 @@ from app.ml.churn_model import (
     ModelConfig,
     predict_churn_score_with_explanation,
 )
+from app.ml.features import FEATURE_REGISTRY
 
-# Веса признаков по умолчанию (экспертная оценка, шкала логита). Модель сама
-# весов не задаёт — их передаёт пользователь через настройки; эти значения
-# адаптер отдаёт в ``default_settings()`` как стартовую точку.
-# Обоснование:
-#   - prolong_wait — сильнейший сигнал: клиент уже не оплатил услугу,
-#     и через 5 дней она будет удалена. Самый большой вес (+3.0).
-#   - prolong_wait_without_funds — усиливающий модификатор: ждёт оплаты,
-#     а денег нет даже с учётом бонусов (+2.0). В сумме с предыдущим
-#     даёт logit +5, что даёт оценку риска около 99.
-#   - failed_payment_ratio — доля неуспешных платежей, прямая история
-#     проблем с оплатой (+2.0 * ratio).
-#   - balance_deficit — ближайшие продления дороже доступных средств:
-#     физически не хватит денег продлить (+1.5).
-#   - autoprolong_off_ratio — клиент не доверяет автопродлению, каждое
-#     продление — ручное решение, где можно отказаться (+1.5 * ratio).
-#   - expires_soon_no_autoprolong — точка принятия решения уже близко,
-#     а автоматики нет (+1.2).
-#   - suspended_ratio — услуги уже приостановлены (обычно за неуплату),
-#     клиент частично «отвалился» (+1.0 * ratio).
-#   - deleted_blocked_ratio — клиент уже удалял услуги раньше,
-#     демонстрировал готовность расстаться с сервисами (+1.0 * ratio).
-#   - full_autoprolong_coverage — защитный признак: всё продлевается
-#     автоматически, клиент настроил и забыл (-1.0).
-#   - sufficient_funds — защитный признак: средств хватает на все
-#     ближайшие продления (-0.8).
-_DEFAULT_WEIGHTS: dict[str, float] = {
-    "has_prolong_wait": 3.0,
-    "prolong_wait_without_funds": 2.0,
-    "failed_payment_ratio": 2.0,
-    "balance_deficit": 1.5,
-    "autoprolong_off_ratio": 1.5,
-    "expires_soon_no_autoprolong": 1.2,
-    "suspended_ratio": 1.0,
-    "deleted_blocked_ratio": 1.0,
-    "full_autoprolong_coverage": -1.0,
-    "sufficient_funds": -0.8,
-}
+# Веса и тексты причин по умолчанию выводятся из реестра признаков
+# (app/ml/features) — у каждого Feature вес и текст объяснения уже заданы
+# рядом с его формулой, здесь их незачем дублировать вручную (раньше это
+# были два отдельных литерала, которые нужно было синхронизировать руками
+# при каждом новом признаке — источник рассинхрона).
+_DEFAULT_WEIGHTS: dict[str, float] = {feature.code: feature.default_weight for feature in FEATURE_REGISTRY}
 
 # Свободный член по умолчанию: отрицательное значение означает «клиент без
 # тревожных сигналов считается лояльным».
@@ -114,19 +85,8 @@ _PERIOD_DAYS: dict[str, float] = {
     "year": 365,
 }
 
-# Человеко-читаемые причины по именам признаков.
-_REASON_TEXTS: dict[str, str] = {
-    "has_prolong_wait": "Есть услуга в статусе «Ожидает оплаты»",
-    "prolong_wait_without_funds": "Ожидает оплаты, а денег на счёте не хватает",
-    "failed_payment_ratio": "Много неуспешных платежей",
-    "balance_deficit": "Баланса не хватает на ближайшие продления",
-    "autoprolong_off_ratio": "У активных услуг выключено автопродление",
-    "expires_soon_no_autoprolong": "Услуга скоро истекает, автопродление выключено",
-    "suspended_ratio": "Часть услуг приостановлена",
-    "deleted_blocked_ratio": "Раньше удалял или потерял услуги",
-    "full_autoprolong_coverage": "Всё продлевается автоматически",
-    "sufficient_funds": "Средств хватает на ближайшие продления",
-}
+# Человеко-читаемые причины по кодам признаков — тоже из реестра.
+_REASON_TEXTS: dict[str, str] = {feature.code: feature.reason_text for feature in FEATURE_REGISTRY}
 
 
 def _is_number(value: Any) -> bool:
@@ -328,6 +288,9 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
             "balance": account.balance,
             "bonusBalance": account.bonus_balance,
             "bonusState": account.bonus_state == "unlocked",
+            # Только для признака customer_value (app/ml/features/customer_value.py) —
+            # остальные признаки на сумму пополнений не смотрят.
+            "totalReplenished": account.total_replenished,
             "services": [
                 {
                     "status": service.status,
