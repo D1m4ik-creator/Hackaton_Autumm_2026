@@ -13,6 +13,7 @@ export function ClientRiskIndicator({ client }: { client: Client }) {
     <Tooltip title={label}>
       <span className="client-risk-indicator" role="img" aria-label={label} tabIndex={0}>
         <Progress type="circle" percent={client.score} size={40} strokeWidth={9} strokeColor={riskColors[client.risk]} railColor="var(--dashboard-ring-track)" strokeLinecap="round" />
+        <span className="client-risk-indicator__level">{riskLabels[client.risk]}</span>
       </span>
     </Tooltip>
   )

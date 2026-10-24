@@ -6,6 +6,7 @@ const API_URL = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//$
 // Все роуты бэка, кроме /metrics, смонтированы под этим префиксом (backend/app/main.py)
 const API_PREFIX = '/api/v1'
 export const API_BASE_URL = `${API_URL}${API_PREFIX}`
+export const METRICS_URL = `${API_URL}/metrics`
 
 export class ApiError extends Error {
   status: number

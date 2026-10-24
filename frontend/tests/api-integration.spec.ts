@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 const timestamp = '2026-10-24T12:00:00Z'
+const snapshotTimestamp = '2026-10-19T09:00:00Z'
 const managerId = '11111111-1111-4111-8111-111111111111'
 
 async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedIn = true) {
@@ -10,6 +11,9 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     refreshCalls: 0, expireMe: false, failCustomers: false, expireCustomers: false,
     refreshFailure: null as 'network' | 429 | 500 | null,
     expireSettingsPatch: false,
+    asOf: snapshotTimestamp as string | null,
+    lossExplanation: 'Ожидаемые потери с учётом вероятности оттока и покрытия балансом',
+    onSettingsSaved: null as (() => void) | null,
     settings: { asOf: null } as Record<string, unknown>,
     managers: [{ id: managerId, login: 'manager1', email: 'manager1@example.com', role: 'manager', createdAt: timestamp }],
     requests: [] as { path: string; method: string; body: unknown }[],
@@ -77,7 +81,7 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
         const items = state.customers.filter((customer) => customer.level === level)
         return [level === 'no_data' ? 'noData' : level, { customers: items.length, expectedLossCents: items.reduce((sum, customer) => sum + customer.expectedLossCents, 0) }]
       }))
-      return respond({ customersTotal: state.customers.length, byLevel, expectedLossCents: state.customers.reduce((sum, customer) => sum + customer.expectedLossCents, 0), lossExplanation: 'Ожидаемые потери', asOf: timestamp, recalculatedAt: timestamp, version: state.version })
+      return respond({ customersTotal: state.customers.length, byLevel, expectedLossCents: state.customers.reduce((sum, customer) => sum + customer.expectedLossCents, 0), lossExplanation: state.lossExplanation, asOf: state.asOf, recalculatedAt: timestamp, version: state.version })
     }
     if (path === '/customers') {
       state.customerCalls++
@@ -102,14 +106,16 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
       const customer = state.customers.find((item) => item.id === Number(path.split('/').at(-1)))
       if (!customer) return respond({ detail: 'Клиент не найден' }, 404)
       return respond({ ...customer, withdrawBalance: 0, bonusBalance: 0, bonusState: 'unlocked',
-        reasons: [{ code: 'model_not_connected', text: 'Модель анализа ещё не подключена' }], details: {},
+        reasons: customer.level === 'no_data'
+          ? [{ code: 'model_not_connected', text: 'Модель анализа ещё не подключена' }]
+          : [{ code: 'auto_prolong', text: customer.reasonShort }], details: {},
         services: [{ id: 1, name: 'VPS Test', status: 'active', price: 1299, autoProlong: false, paymentTerm: 'week', createdAt: timestamp, expiresAt: timestamp }],
         transactions: { total: 5, performed: 3, notPerformed: 2 }, asOf: timestamp, calculatedAt: timestamp,
       })
     }
     if (path === '/model/settings') {
       if (method === 'PATCH' && state.expireSettingsPatch) return respond({ detail: 'Access expired' }, 401)
-      if (method === 'PATCH') { state.settings = { ...state.settings, ...body }; state.version++ }
+      if (method === 'PATCH') { state.settings = { ...state.settings, ...body }; state.version++; state.onSettingsSaved?.() }
       return respond({ settings: state.settings, defaults: { asOf: null }, updatedAt: timestamp, version: state.version })
     }
     if (path === '/source/snapshot') { state.version++; return respond({ accounts: 1, services: 0, transactions: 0, version: state.version, recalculatedAt: timestamp }) }
@@ -166,13 +172,20 @@ test('dashboard uses the API summary, converts cents and updates over SSE', asyn
   await expect(page.locator('.total-value')).toHaveText('55')
   await expect(page.locator('.revenue-value')).toHaveText('€675,00')
   await expect(page.locator('.account-summary').getByText('нет оценки: 1', { exact: true })).toBeVisible()
+  await expect(page.locator('.dashboard-loss-explanation')).toHaveText(api.lossExplanation)
+  const asOf = await page.evaluate((value) => new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)), snapshotTimestamp)
+  await expect(page.locator('.dashboard-as-of')).toHaveText(`Данные на: ${asOf}`)
   await expect(page.getByRole('button', { name: /^Открыть клиента/ })).toHaveCount(4)
   await expect.poll(() => page.evaluate(() => (window as unknown as { streams: EventSource[] }).streams.filter((stream) => stream.readyState !== 2).map((stream) => ({ url: stream.url, withCredentials: stream.withCredentials })))).toEqual([{ url: 'http://127.0.0.1:8000/api/v1/events', withCredentials: true }])
   api.customers.pop()
   api.version++
+  api.asOf = null
+  api.lossExplanation = 'Обновлённая оценка потерь'
   const calls = api.customerCalls
   await emit(page)
   await expect(page.locator('.total-value')).toHaveText('54')
+  await expect(page.locator('.dashboard-as-of')).toHaveText('Данные на: —')
+  await expect(page.locator('.dashboard-loss-explanation')).toHaveText(api.lossExplanation)
   await expect.poll(() => api.customerCalls).toBeGreaterThan(calls)
   await page.setViewportSize({ width: 375, height: 812 })
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
@@ -182,6 +195,10 @@ test('customers send both sort directions for every field, page, search and no_d
   const api = await setupApi(page)
   await page.goto('/app/clients')
   await expect(page.getByRole('link', { name: 'Открыть клиента client002@example.com', exact: true })).toBeVisible()
+  const scoredRow = page.getByRole('row').filter({ has: page.getByRole('link', { name: 'Открыть клиента client002@example.com', exact: true }) })
+  await expect(scoredRow.locator('.client-table-reason')).toHaveText('Проверьте автопродление')
+  await expect(scoredRow.locator('.client-risk-indicator__level')).toHaveText('Высокий')
+  await expect(scoredRow.getByRole('img', { name: 'Высокий риск · 99%' })).toBeVisible()
   for (const [title, field] of [['ID', 'id'], ['EMAIL', 'email'], ['БАЛАНС', 'balance'], ['ПОПОЛНЕНИЯ', 'totalReplenished'], ['RISK', 'riskScore']]) {
     for (const order of ['asc', 'desc']) {
       const request = page.waitForRequest((req) => {
@@ -437,3 +454,55 @@ for (const screen of ['dashboard', 'customers', 'card'] as const) {
     }
   })
 }
+
+test('metrics navigation opens the backend Prometheus endpoint in a new tab', async ({ page }) => {
+  await setupApi(page)
+  await page.context().route('http://127.0.0.1:8000/metrics', (route) => route.fulfill({
+    contentType: 'text/plain; version=0.0.4; charset=utf-8',
+    body: 'churn_customers_total 55\nchurn_expected_loss_eurocents 67500\n',
+  }))
+  await page.goto('/')
+  const link = page.getByRole('link', { name: 'Метрики /metrics', exact: true })
+  await expect(link).toHaveAttribute('href', 'http://127.0.0.1:8000/metrics')
+  const popupOpened = page.waitForEvent('popup')
+  await link.click()
+  const metricsPage = await popupOpened
+  await expect(metricsPage).toHaveURL('http://127.0.0.1:8000/metrics')
+  await expect(metricsPage.locator('body')).toContainText('churn_customers_total 55')
+  await expect(metricsPage.locator('body')).toContainText('churn_expected_loss_eurocents 67500')
+  await expect(page).toHaveURL('http://127.0.0.1:5174/')
+  await metricsPage.close()
+})
+
+test('saving settings refreshes the summary and the customer data shown afterwards', async ({ page }) => {
+  const api = await setupApi(page)
+  api.onSettingsSaved = () => {
+    Object.assign(api.customers[1], { riskScore: 12, level: 'low', expectedLossCents: 123, reasonShort: 'Автопродление восстановлено' })
+  }
+  await page.goto('/app/model-settings')
+  const editor = page.getByRole('textbox', { name: 'Настройки модели JSON' })
+  await expect(editor).toHaveValue(JSON.stringify({ asOf: null }, null, 2))
+  await expect.poll(() => api.summaryCalls).toBeGreaterThan(0)
+  const summaryCalls = api.summaryCalls
+  const settings = { asOf: snapshotTimestamp, coefficients: { balance: 0.5 } }
+  await editor.fill(JSON.stringify(settings))
+  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
+  await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
+  await expect.poll(() => api.summaryCalls).toBeGreaterThan(summaryCalls)
+  expect(api.settings).toEqual(settings)
+  await page.getByRole('link', { name: 'Дашборд', exact: true }).click()
+  await expect(page.locator('.revenue-value')).toHaveText('€663,73')
+  await page.getByRole('link', { name: 'Клиенты под риском', exact: true }).click()
+  await page.getByRole('textbox', { name: 'Поиск клиентов' }).fill('client002@example.com')
+  const client = page.getByRole('link', { name: 'Открыть клиента client002@example.com', exact: true })
+  const row = page.getByRole('row').filter({ has: client })
+  await expect(row.locator('.client-risk-indicator__level')).toHaveText('Низкий')
+  await expect(row.locator('.client-table-reason')).toHaveText('Автопродление восстановлено')
+  await expect(row.getByRole('img', { name: 'Низкий риск · 12%' })).toBeVisible()
+  await client.click()
+  await expect(page.getByRole('heading', { name: 'Клиент #2' })).toBeVisible()
+  await expect(page.locator('.client-profile__stats').getByText('12', { exact: true })).toBeVisible()
+  await expect(page.locator('.client-profile__risk')).toHaveText('НИЗКИЙ РИСК')
+  await expect(page.locator('.client-risk-reasons__list')).toContainText('Автопродление восстановлено')
+  await expect(page.locator('.client-profile__loss')).toHaveText('€1,23')
+})

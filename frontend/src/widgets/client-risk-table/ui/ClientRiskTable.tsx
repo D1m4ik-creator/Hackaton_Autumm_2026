@@ -50,7 +50,10 @@ export function ClientRiskTable() {
   const columns: TableColumnsType<Client> = [
     { ...sortable('id'), title: 'ID', dataIndex: 'accountId', width: 98, className: 'client-id-column', render: (id: number) => `#${id}` },
     { ...sortable('email'), title: 'EMAIL', dataIndex: 'email', width: 270,
-      render: (_, client) => <Link className="client-table-link" to={clientDetailPath(pathname, client.accountId)} title={client.email} aria-label={`Открыть клиента ${client.email}`} onClick={(event) => event.stopPropagation()}>{client.email}</Link> },
+      render: (_, client) => <div>
+        <Link className="client-table-link" to={clientDetailPath(pathname, client.accountId)} title={client.email} aria-label={`Открыть клиента ${client.email}`} onClick={(event) => event.stopPropagation()}>{client.email}</Link>
+        {client.reason && <p className="client-table-reason">{client.reason}</p>}
+      </div> },
     { ...sortable('balance'), title: 'БАЛАНС', dataIndex: 'balanceCents', width: 144, align: 'center', render: formatEuroCents },
     { ...sortable('totalReplenished'), title: 'ПОПОЛНЕНИЯ', dataIndex: 'totalReplenishedCents', width: 160, align: 'center', render: formatEuroCents },
     { ...sortable('riskScore'), title: 'RISK', dataIndex: 'score', align: 'right', className: 'client-risk-column', render: (_, client) => <ClientRiskIndicator client={client} /> },

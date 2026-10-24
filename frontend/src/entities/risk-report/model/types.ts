@@ -6,6 +6,7 @@ export interface RiskReport {
   low: number
   no_data: number
   lossExplanation: string
+  asOf: string | null
   recalculatedAt: string | null
   version: number
 }
