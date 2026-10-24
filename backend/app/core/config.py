@@ -74,6 +74,13 @@ class Config(BaseSettings):
     # Список origin'ов фронта через запятую
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
+    # Путь к файлу исходного снимка для первичной загрузки в пустую базу
+    source_data_path: Path = ROOT_DIR.parent / "origin_data" / "data.json"
+    # Грузить снимок при старте, если таблица accounts пуста
+    seed_on_startup: bool = True
+    # Интервал опроса версии сводки в SSE-потоке, секунды
+    sse_poll_interval_seconds: int = 1
+
     @property
     def database(self) -> DatabaseConfig:
         return DatabaseConfig(
