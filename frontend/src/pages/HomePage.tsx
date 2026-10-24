@@ -12,8 +12,7 @@ export function HomePage() {
 
   return (
     <div>
-      <h1>Привет, {user?.name}</h1>
-      <p>Email: {user?.email}</p>
+      <h1>Привет, {user?.login}</h1>
       <button type="button" onClick={handleLogout}>
         Выйти
       </button>

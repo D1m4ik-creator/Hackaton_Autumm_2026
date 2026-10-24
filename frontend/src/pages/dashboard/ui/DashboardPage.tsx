@@ -1,5 +1,3 @@
-import { ClientsDrawer } from '../../../features/explore-clients'
-import { ThemeToggle } from '../../../features/switch-theme'
 import { DashboardShell } from '../../../widgets/dashboard-shell'
 import { PriorityClients } from '../../../widgets/priority-clients'
 import { AccountSummary, RiskSummary } from '../../../widgets/risk-summary'
@@ -14,7 +12,6 @@ export function DashboardPage({ onSignOut }: { onSignOut?: () => Promise<void> }
           <h1>Обзор рисков оттока</h1>
           <p>Обновляется в реальном времени · пересчёт risk-score каждую ночь</p>
         </div>
-        <ThemeToggle />
       </header>
       <div className="dashboard-grid">
         <AccountSummary />
@@ -24,7 +21,6 @@ export function DashboardPage({ onSignOut }: { onSignOut?: () => Promise<void> }
         <RiskSummary level="low" />
         <RiskTrend />
       </div>
-      <ClientsDrawer />
     </DashboardShell>
   )
 }

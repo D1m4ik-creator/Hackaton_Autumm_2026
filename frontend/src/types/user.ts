@@ -1,5 +1,8 @@
+// Соответствует CurrentUser на бэке (backend/app/db/schemas/auth.py)
+export type UserRole = 'admin' | 'manager'
+
 export interface User {
-  name: string
-  email: string
-  created_at: string
+  login: string
+  role: UserRole
+  email: string | null
 }
