@@ -4,6 +4,23 @@ import type { Page } from '@playwright/test'
 const timestamp = '2026-10-24T12:00:00Z'
 const snapshotTimestamp = '2026-10-19T09:00:00Z'
 const managerId = '11111111-1111-4111-8111-111111111111'
+const modelFeatures = [
+  { id: 'prolong_wait', name: 'Ожидает оплаты (prolong_wait)', weight: 0.4 },
+  { id: 'autoprolong_off', name: 'Автопродление выключено', weight: 0.3 },
+  { id: 'insufficient_balance', name: 'Баланс ниже стоимости продления', weight: 0.2 },
+  { id: 'replenishment_drop', name: 'Падение активности пополнений', weight: 0.1 },
+]
+
+function mergeSettings(base: Record<string, unknown>, patch: Record<string, unknown>): Record<string, unknown> {
+  const merged = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    const previous = merged[key]
+    merged[key] = value && typeof value === 'object' && !Array.isArray(value) && previous && typeof previous === 'object' && !Array.isArray(previous)
+      ? mergeSettings(previous as Record<string, unknown>, value as Record<string, unknown>)
+      : value
+  }
+  return merged
+}
 
 async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedIn = true) {
   const state = {
@@ -115,7 +132,7 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     }
     if (path === '/model/settings') {
       if (method === 'PATCH' && state.expireSettingsPatch) return respond({ detail: 'Access expired' }, 401)
-      if (method === 'PATCH') { state.settings = { ...state.settings, ...body }; state.version++; state.onSettingsSaved?.() }
+      if (method === 'PATCH') { state.settings = mergeSettings(state.settings, body); state.version++; state.onSettingsSaved?.() }
       return respond({ settings: state.settings, defaults: { asOf: null }, updatedAt: timestamp, version: state.version })
     }
     if (path === '/source/snapshot') { state.version++; return respond({ accounts: 1, services: 0, transactions: 0, version: state.version, recalculatedAt: timestamp }) }
@@ -240,23 +257,82 @@ test('customer card renders real reasons, transactions and prices and refreshes 
   await expect(page.getByRole('main').getByText('Клиент не найден', { exact: true })).toBeVisible()
 })
 
-test('settings load and PATCH actual JSON, preserving drafts across SSE', async ({ page }) => {
+test('settings sliders load from API, save edits and preserve drafts across SSE', async ({ page }) => {
   const api = await setupApi(page)
+  api.settings = { asOf: timestamp, features: structuredClone(modelFeatures), thresholds: { high: 80, medium: 40 }, coefficients: { balance: 0.5 } }
   await page.goto('/app/model-settings')
-  const editor = page.getByRole('textbox', { name: 'Настройки модели JSON' })
-  await expect(editor).toHaveValue(JSON.stringify({ asOf: null }, null, 2))
-  await editor.fill('{broken')
-  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
-  await expect(page.getByText('Проверьте формат JSON.')).toBeVisible()
-  const settings = { asOf: '2026-10-24T12:00:00Z', coefficients: { balance: 0.5 } }
-  await editor.fill(JSON.stringify(settings))
+  const slider = page.getByRole('slider', { name: 'Ожидает оплаты (prolong_wait)', exact: true })
+  const weight = page.getByRole('spinbutton', { name: 'Вес: Ожидает оплаты (prolong_wait)', exact: true })
+  await expect(slider).toHaveAttribute('aria-valuenow', '0.4')
+  await slider.focus()
+  await slider.press('ArrowRight')
+  await expect(weight).toHaveValue('0.41')
+  await weight.fill('0.50')
+  await page.getByRole('spinbutton', { name: 'Вес: Автопродление выключено', exact: true }).fill('0.20')
+  await page.getByRole('spinbutton', { name: 'Высокий риск, от', exact: true }).fill('85')
+  api.settings.asOf = snapshotTimestamp
   await emit(page)
-  await expect(editor).toHaveValue(JSON.stringify(settings))
+  await expect(slider).toHaveAttribute('aria-valuenow', '0.5')
   await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
   await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
-  expect(api.settings).toEqual(settings)
+  expect(api.settings).toEqual({
+    asOf: snapshotTimestamp, coefficients: { balance: 0.5 }, thresholds: { high: 85, medium: 40 },
+    features: modelFeatures.map((feature, index) => ({ ...feature, weight: [0.5, 0.2, 0.2, 0.1][index] })),
+  })
+  const patch = api.requests.find((request) => request.path === '/model/settings' && request.method === 'PATCH')!
+  expect(patch.body).toEqual({ features: api.settings.features, thresholds: { high: 85 } })
   await page.reload()
-  await expect(editor).toHaveValue(JSON.stringify(settings, null, 2))
+  await expect(slider).toHaveAttribute('aria-valuenow', '0.5')
+  await expect(page.getByRole('spinbutton', { name: 'Высокий риск, от', exact: true })).toHaveValue('85 баллов')
+})
+
+test('settings restore the original slider layout when the API only provides asOf', async ({ page }) => {
+  const api = await setupApi(page)
+  await page.goto('/app/model-settings')
+  await expect(page.getByRole('slider')).toHaveCount(4)
+  await expect(page.getByRole('heading', { name: 'Веса признаков', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Пороги уровней риска', exact: true })).toBeVisible()
+  await expect(page.getByRole('slider', { name: 'Ожидает оплаты (prolong_wait)', exact: true })).toHaveAttribute('aria-valuenow', '0.42')
+  await expect(page.getByText('Модель расчёта пока не подключена.', { exact: false })).toBeVisible()
+  await expect(page.locator('textarea')).toHaveCount(0)
+  await page.screenshot({ path: 'test-results/model-settings-sliders.png', fullPage: true })
+  const date = page.getByLabel('Дата расчёта', { exact: true })
+  await date.fill('2026-10-19T12:30')
+  const expected = await page.evaluate(() => new Date('2026-10-19T12:30').toISOString())
+  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
+  await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
+  expect(api.settings).toEqual({ asOf: expected })
+})
+
+test('settings validate weight sums and risk thresholds before saving', async ({ page }) => {
+  const api = await setupApi(page)
+  await page.goto('/app/model-settings')
+  const weight = page.getByRole('spinbutton', { name: 'Вес: Ожидает оплаты (prolong_wait)', exact: true })
+  await expect(weight).toHaveValue('0.42')
+  await weight.fill('0.50')
+  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
+  await expect(page.getByText('Сумма весов должна быть равна 1.00.', { exact: true })).toBeVisible()
+  await weight.fill('0.42')
+  await page.getByRole('spinbutton', { name: 'Средний риск, от', exact: true }).fill('90')
+  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
+  await expect(page.getByText('Порог высокого риска должен быть больше порога среднего риска.', { exact: true })).toBeVisible()
+  expect(api.requests.filter((request) => request.path === '/model/settings' && request.method === 'PATCH')).toHaveLength(0)
+})
+
+test('settings add a feature with a slider and persist it through the API', async ({ page }) => {
+  const api = await setupApi(page)
+  await page.goto('/app/model-settings')
+  await page.getByRole('button', { name: '+ Добавить признак', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Добавить признак', exact: true })
+  await dialog.getByLabel('Название признака', { exact: true }).fill('Неоплаченные транзакции')
+  await dialog.getByRole('button', { name: 'Добавить', exact: true }).click()
+  await expect(page.getByRole('slider')).toHaveCount(5)
+  await expect(page.getByRole('slider', { name: 'Неоплаченные транзакции', exact: true })).toHaveAttribute('aria-valuenow', '0')
+  await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
+  await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
+  expect(api.settings.features).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'Неоплаченные транзакции', weight: 0 })]))
+  await page.reload()
+  await expect(page.getByRole('slider', { name: 'Неоплаченные транзакции', exact: true })).toBeVisible()
 })
 
 test('manager cannot access administrative navigation or routes', async ({ page }) => {
@@ -387,17 +463,16 @@ for (const failure of [500, 429, 'network'] as const) {
   test(`temporary refresh failure ${failure} preserves the session and settings draft`, async ({ page }) => {
     const api = await setupApi(page)
     await page.goto('/app/model-settings')
-    const editor = page.getByRole('textbox', { name: 'Настройки модели JSON' })
-    await expect(editor).toHaveValue(JSON.stringify({ asOf: null }, null, 2))
-    const draft = JSON.stringify({ asOf: timestamp })
-    await editor.fill(draft)
+    const threshold = page.getByRole('spinbutton', { name: 'Высокий риск, от', exact: true })
+    await expect(threshold).toHaveValue('70 баллов')
+    await threshold.fill('75')
     api.expireSettingsPatch = true
     api.refreshFailure = failure
     const refreshCalls = api.refreshCalls
     await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
     const reason = failure === 'network' ? 'Нет соединения с сервером' : 'Обновление сессии временно недоступно'
     await expect(page.locator('.model-settings-form').getByRole('alert')).toContainText(reason)
-    await expect(editor).toHaveValue(draft)
+    await expect(threshold).toHaveValue('75 баллов')
     await expect(page).toHaveURL(/\/app\/model-settings$/)
     expect(api.refreshCalls).toBe(refreshCalls + 1)
     expect(await page.evaluate(() => (window as unknown as { sessionExpirations: number }).sessionExpirations)).toBe(0)
@@ -406,7 +481,7 @@ for (const failure of [500, 429, 'network'] as const) {
     api.refreshFailure = null
     await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
     await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
-    expect(api.settings).toEqual({ asOf: timestamp })
+    expect(api.settings).toEqual({ asOf: null, thresholds: { high: 75 } })
   })
 }
 
@@ -480,16 +555,15 @@ test('saving settings refreshes the summary and the customer data shown afterwar
     Object.assign(api.customers[1], { riskScore: 12, level: 'low', expectedLossCents: 123, reasonShort: 'Автопродление восстановлено' })
   }
   await page.goto('/app/model-settings')
-  const editor = page.getByRole('textbox', { name: 'Настройки модели JSON' })
-  await expect(editor).toHaveValue(JSON.stringify({ asOf: null }, null, 2))
+  const threshold = page.getByRole('spinbutton', { name: 'Высокий риск, от', exact: true })
+  await expect(threshold).toHaveValue('70 баллов')
   await expect.poll(() => api.summaryCalls).toBeGreaterThan(0)
   const summaryCalls = api.summaryCalls
-  const settings = { asOf: snapshotTimestamp, coefficients: { balance: 0.5 } }
-  await editor.fill(JSON.stringify(settings))
+  await threshold.fill('75')
   await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
   await expect(page.getByText('Настройки сохранены, оценки пересчитаны')).toBeVisible()
   await expect.poll(() => api.summaryCalls).toBeGreaterThan(summaryCalls)
-  expect(api.settings).toEqual(settings)
+  expect(api.settings).toEqual({ asOf: null, thresholds: { high: 75 } })
   await page.getByRole('link', { name: 'Дашборд', exact: true }).click()
   await expect(page.locator('.revenue-value')).toHaveText('€663,73')
   await page.getByRole('link', { name: 'Клиенты под риском', exact: true }).click()
