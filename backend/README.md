@@ -79,6 +79,21 @@ docker compose up -d authentik-db authentik-redis authentik-server authentik-wor
    `'profile'`. Без них в `id_token`/`userinfo` не будет `email`, и бэкенд не
    сможет сопоставить вход с локальным аккаунтом (отработает как
    `oidc_no_account`, даже если юзер с таким email есть).
+   **Важно про `email_verified`**: бэкенд связывает аккаунты только при
+   `email_verified: true`, а стандартный маппинг `'email'` в Authentik всегда
+   отдаёт `false`. Поэтому вместо него создать свой Scope Mapping
+   (Customization → Property Mappings → Scope Mapping, scope name `email`):
+
+   ```python
+   return {
+       "email": request.user.email,
+       "email_verified": True,
+   }
+   ```
+
+   и подключить его к Provider вместо `authentik default OAuth Mapping: OpenID 'email'`.
+   Это безопасно, пока пользователей в Authentik заводит администратор
+   (самостоятельная регистрация выключена — так по умолчанию).
 5. На странице Provider скопировать `Client ID`, `Client Secret` и ссылку
    `OpenID Configuration Issuer` в `backend/.env`:
 
