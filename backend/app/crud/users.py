@@ -10,6 +10,7 @@ from app.core.security import get_password_hash
 from app.dao.session import SessionsDAO
 from app.dao.user import UsersDAO
 from app.db.models.users import User
+from app.db.schemas.auth import CurrentUser
 from app.db.schemas.users import UserCreate, UserUpdate
 
 
@@ -30,15 +31,28 @@ async def _check_unique(db: AsyncSession, login: str | None, email: str | None, 
             raise _conflict("Почта уже занята")
 
 
-async def list_users(db: AsyncSession) -> list[User]:
-    return await UsersDAO.list_all(db)
+def _forbidden() -> HTTPException:
+    return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
 
 
-async def create_user(db: AsyncSession, data: UserCreate) -> User:
+def _check_can_manage(actor: CurrentUser, target: User) -> None:
+    """Админов создаёт и меняет только суперадмин; админ управляет менеджерами"""
+    if target.role == "admin" and actor.role != "superadmin":
+        raise _forbidden()
+
+
+async def list_users(db: AsyncSession, actor: CurrentUser) -> list[User]:
+    """Суперадмин видит админов и менеджеров, админ только менеджеров"""
+    return await UsersDAO.list_all(db, role=None if actor.role == "superadmin" else "manager")
+
+
+async def create_user(db: AsyncSession, data: UserCreate, actor: CurrentUser) -> User:
+    if data.role == "admin" and actor.role != "superadmin":
+        raise _forbidden()
     await _check_unique(db, data.login, data.email)
     try:
         return await UsersDAO.add(
-            db, login=data.login, email=data.email, password_hash=await asyncio.to_thread(get_password_hash, data.password), role="manager"
+            db, login=data.login, email=data.email, password_hash=await asyncio.to_thread(get_password_hash, data.password), role=data.role
         )
     except IntegrityError:
         await db.rollback()
@@ -52,8 +66,9 @@ async def _get_or_404(db: AsyncSession, user_id: uuid.UUID) -> User:
     return user
 
 
-async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate) -> User:
+async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, actor: CurrentUser) -> User:
     user = await _get_or_404(db, user_id)
+    _check_can_manage(actor, user)
     values = data.model_dump(exclude_none=True)
     if not values:
         return user
@@ -73,7 +88,8 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate) ->
     return user
 
 
-async def delete_user(db: AsyncSession, user_id: uuid.UUID) -> None:
+async def delete_user(db: AsyncSession, user_id: uuid.UUID, actor: CurrentUser) -> None:
     user = await _get_or_404(db, user_id)
+    _check_can_manage(actor, user)
     await SessionsDAO.delete_by_login(db, user.login)
     await UsersDAO.delete_by_id(db, user.id)
