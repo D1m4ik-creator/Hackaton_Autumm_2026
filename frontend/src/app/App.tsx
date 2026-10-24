@@ -125,7 +125,7 @@ export default function App() {
           <Route path="/" element={<ProtectedRoute><AuthenticatedDashboard /></ProtectedRoute>} />
           <Route path="/app/clients" element={<ProtectedRoute><AuthenticatedClients /></ProtectedRoute>} />
           <Route path="/app/clients/:clientId" element={<ProtectedRoute><AuthenticatedClientDetail /></ProtectedRoute>} />
-          <Route path="/app/model-settings" element={<ProtectedRoute adminOnly><AuthenticatedModelSettings /></ProtectedRoute>} />
+          <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
           <Route path="/app/users" element={<ProtectedRoute adminOnly><AuthenticatedManagers /></ProtectedRoute>} />
         </Route>
       </Route>

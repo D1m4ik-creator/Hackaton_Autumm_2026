@@ -57,7 +57,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
     <nav className="dashboard-nav" aria-label="Основная навигация">
       <NavLink to={dashboardPath} end className={navClassName} onClick={() => setMenuOpen(false)}>Дашборд</NavLink>
       <NavLink to={clientsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Клиенты под риском</NavLink>
-      {isAdmin && <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>}
+      <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>
       {isAdmin && <NavLink to="/app/users" className={navClassName} onClick={() => setMenuOpen(false)}>Управление менеджерами</NavLink>}
       {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setSnapshotOpen(true))}>Загрузить снимок</button>}
       <a className="dashboard-nav__item" href={METRICS_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>Метрики /metrics</a>

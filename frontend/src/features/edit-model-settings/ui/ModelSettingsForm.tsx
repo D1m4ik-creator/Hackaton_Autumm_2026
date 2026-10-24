@@ -8,6 +8,7 @@ import { formatDateTime } from '../../../shared/lib/format'
 import { getWeightSum, readModelSettings, toSettingsPatch, validateModelSettings } from '../../../entities/model-settings'
 import type { ModelSettings } from '../../../entities/model-settings'
 import { AddModelFeatureModal } from './AddModelFeatureModal'
+import { useAuth } from '../../../context/AuthContext'
 import './model-settings-form.css'
 
 const weightColors = ['var(--dashboard-accent-bright)', 'var(--dashboard-text)', 'var(--dashboard-ring-medium)', 'var(--dashboard-muted)']
@@ -21,6 +22,8 @@ function localDateTime(value: string | null): string {
 }
 
 export function ModelSettingsForm() {
+  const { user } = useAuth()
+  const readOnly = user?.role !== 'admin'
   const { data, loading, error, reload, setData } = useApiResource(getModelSettings)
   const { message } = App.useApp()
   const [draft, setDraft] = useState<{ value: ModelSettings; baseline: ModelSettings } | null>(null)
@@ -33,7 +36,7 @@ export function ModelSettingsForm() {
   const dirty = draft !== null && JSON.stringify(draft.value) !== JSON.stringify(draft.baseline)
 
   function edit(update: (settings: ModelSettings) => ModelSettings) {
-    if (!value) return
+    if (!value || readOnly || saving) return
     setDraft({ value: update(value), baseline: draft?.baseline ?? value })
     setSaveError(null)
   }
@@ -45,7 +48,7 @@ export function ModelSettingsForm() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSaveError(null)
-    if (!value || !saved || saving) return
+    if (!value || !saved || saving || readOnly) return
     const validationError = validateModelSettings(value)
     if (validationError) { setSaveError(validationError); return }
     setSaving(true)
@@ -77,13 +80,13 @@ export function ModelSettingsForm() {
                 return <div className="model-weight" key={feature.id} style={{ '--weight-color': color } as CSSProperties}>
                   <div className="model-weight__header">
                     <label id={`weight-label-${feature.id}`} htmlFor={`weight-${feature.id}`}>{feature.name}</label>
-                    <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} disabled={saving} onChange={(weight) => setWeight(feature.id, weight ?? 0)} />
+                    <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight ?? 0)} />
                   </div>
-                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} disabled={saving} onChange={(weight) => setWeight(feature.id, weight)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (weight) => weight?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
+                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (weight) => weight?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
                 </div>
               })}
             </div>
-            <Button className="model-settings-add" htmlType="button" disabled={saving} onClick={() => setAddingFeature(true)}>+ Добавить признак</Button>
+            {!readOnly && <Button className="model-settings-add" htmlType="button" disabled={saving} onClick={() => setAddingFeature(true)}>+ Добавить признак</Button>}
             <p className="model-settings-weights__note">Сумма весов: {getWeightSum(value).toFixed(2)} · должна быть равна 1.00</p>
             {!Array.isArray(data.defaults.features) && <p className="model-settings-weights__note">Модель расчёта пока не подключена. Веса и пороги сохраняются, но пока не влияют на оценку.</p>}
           </div>
@@ -93,21 +96,21 @@ export function ModelSettingsForm() {
           <div className="model-settings-thresholds__fields">
             {(['high', 'medium'] as const).map((level) => <div className="model-threshold" key={level}>
               <label htmlFor={`threshold-${level}`}>{level === 'high' ? 'Высокий' : 'Средний'} риск, от</label>
-              <InputNumber<number> id={`threshold-${level}`} aria-label={`${level === 'high' ? 'Высокий' : 'Средний'} риск, от`} min={0} max={100} precision={0} controls={false} value={value.thresholds[level]} disabled={saving} formatter={(number, { userTyping, input }) => userTyping ? input : `${number ?? ''} баллов`} parser={(number) => Number((number ?? '').replace(/[^\d-]/g, ''))} onChange={(number) => edit((settings) => ({ ...settings, thresholds: { ...settings.thresholds, [level]: number ?? 0 } }))} />
+              <InputNumber<number> id={`threshold-${level}`} aria-label={`${level === 'high' ? 'Высокий' : 'Средний'} риск, от`} min={0} max={100} precision={0} controls={false} value={value.thresholds[level]} disabled={saving || readOnly} formatter={(number, { userTyping, input }) => userTyping ? input : `${number ?? ''} баллов`} parser={(number) => Number((number ?? '').replace(/[^\d-]/g, ''))} onChange={(number) => edit((settings) => ({ ...settings, thresholds: { ...settings.thresholds, [level]: number ?? 0 } }))} />
             </div>)}
             <div className="model-threshold">
               <label htmlFor="model-as-of">Дата расчёта</label>
-              <Input id="model-as-of" type="datetime-local" value={localDateTime(value.asOf)} disabled={saving} onChange={(event) => edit((settings) => ({ ...settings, asOf: event.target.value ? new Date(event.target.value).toISOString() : null }))} />
+              <Input id="model-as-of" type="datetime-local" value={localDateTime(value.asOf)} disabled={saving || readOnly} onChange={(event) => edit((settings) => ({ ...settings, asOf: event.target.value ? new Date(event.target.value).toISOString() : null }))} />
               <p className="model-settings-save-note">Оставьте пустым для текущего времени</p>
             </div>
           </div>
-          <Button className="model-settings-save" htmlType="submit" loading={saving} disabled={loading || !dirty}>СОХРАНИТЬ ИЗМЕНЕНИЯ</Button>
+          {readOnly ? <p className="model-settings-save-note" role="status">Режим просмотра. Изменять настройки может администратор.</p> : <Button className="model-settings-save" htmlType="submit" loading={saving} disabled={loading || !dirty}>СОХРАНИТЬ ИЗМЕНЕНИЯ</Button>}
           <p className="model-settings-save-note">Обновлено: {formatDateTime(data.updatedAt)}</p>
           {(saveError || error) && <Alert className="model-settings-error" type="error" showIcon title={saveError ?? error} role="alert" />}
         </section>
       </form>
     </Spin>
-    <AddModelFeatureModal open={addingFeature} features={value.features} onClose={() => setAddingFeature(false)} onAdd={(name, weight) => edit((settings) => ({ ...settings, features: [...settings.features, { id: `custom-${crypto.randomUUID()}`, name, weight }] }))} />
+    {!readOnly && <AddModelFeatureModal open={addingFeature} features={value.features} onClose={() => setAddingFeature(false)} onAdd={(name, weight) => edit((settings) => ({ ...settings, features: [...settings.features, { id: `custom-${crypto.randomUUID()}`, name, weight }] }))} />}
     </ConfigProvider>
   )
 }

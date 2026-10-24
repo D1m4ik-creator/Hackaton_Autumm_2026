@@ -28,6 +28,9 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     refreshCalls: 0, expireMe: false, failCustomers: false, expireCustomers: false,
     refreshFailure: null as 'network' | 429 | 500 | null,
     expireSettingsPatch: false,
+    loginFailure: null as 401 | 429 | null,
+    customerFailure: null as 403 | 'network' | null,
+    snapshotError: null as Record<string, unknown> | null,
     asOf: snapshotTimestamp as string | null,
     lossExplanation: 'Ожидаемые потери с учётом вероятности оттока и покрытия балансом',
     onSettingsSaved: null as (() => void) | null,
@@ -79,7 +82,10 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
       headers: { 'access-control-allow-origin': 'http://127.0.0.1:5174', 'access-control-allow-credentials': 'true' },
     })
     if (method === 'OPTIONS') return respond(null, 204)
-    if (path === '/auth/login') { state.loggedIn = true; return respond({ message: 'OK' }) }
+    if (path === '/auth/login') {
+      if (state.loginFailure) return respond({ detail: state.loginFailure === 429 ? 'Rate limit exceeded' : 'Неверный логин или пароль' }, state.loginFailure)
+      state.loggedIn = true; return respond({ message: 'OK' })
+    }
     if (path === '/auth/logout') { state.loggedIn = false; return respond({ message: 'OK' }) }
     if (path === '/auth/refresh') {
       state.refreshCalls++
@@ -103,6 +109,8 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     if (path === '/customers') {
       state.customerCalls++
       if (state.expireCustomers) return respond({ detail: 'Access expired' }, 401)
+      if (state.customerFailure === 'network') return route.abort('failed')
+      if (state.customerFailure === 403) return respond({ detail: 'Forbidden' }, 403)
       if (state.failCustomers) return respond({ detail: 'Временная ошибка' }, 500)
       const params = url.searchParams
       const search = params.get('search') ?? ''
@@ -135,16 +143,21 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
       if (method === 'PATCH') { state.settings = mergeSettings(state.settings, body); state.version++; state.onSettingsSaved?.() }
       return respond({ settings: state.settings, defaults: { asOf: null }, updatedAt: timestamp, version: state.version })
     }
-    if (path === '/source/snapshot') { state.version++; return respond({ accounts: 1, services: 0, transactions: 0, version: state.version, recalculatedAt: timestamp }) }
+    if (path === '/source/snapshot') {
+      if (state.snapshotError) return respond(state.snapshotError, 422)
+      state.version++
+      return respond({ accounts: body.accounts.length, services: body.services.length, transactions: body.transactions.length, version: state.version, recalculatedAt: timestamp })
+    }
     if (path === '/users' && method === 'GET') return respond(state.managers)
     if (path === '/users' && method === 'POST') {
-      const created = { id: '22222222-2222-4222-8222-222222222222', ...body, role: 'manager', createdAt: timestamp }
+      const created = { id: '22222222-2222-4222-8222-222222222222', login: body.login, email: body.email, role: 'manager', createdAt: timestamp }
       state.managers.push(created)
       return respond(created, 201)
     }
     if (path.startsWith('/users/') && method === 'PATCH') {
       const manager = state.managers.find((item) => path.endsWith(item.id))!
-      Object.assign(manager, body)
+      if (typeof body.login === 'string') manager.login = body.login
+      if (typeof body.email === 'string') manager.email = body.email
       return respond(manager)
     }
     if (path.startsWith('/users/') && method === 'DELETE') {
@@ -391,18 +404,26 @@ test('settings add a feature with a slider and persist it through the API', asyn
   await expect(page.getByRole('slider', { name: 'Неоплаченные транзакции', exact: true })).toBeVisible()
 })
 
-test('manager cannot access administrative navigation or routes', async ({ page }) => {
+test('manager views settings without mutation controls and cannot access user management', async ({ page }) => {
   const api = await setupApi(page, 'manager')
   await page.goto('/')
   await expect(page.locator('.total-value')).toHaveText('55')
-  await expect(page.getByRole('link', { name: 'Настройка модели', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: 'Настройка модели', exact: true })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Управление менеджерами', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Загрузить снимок' })).toHaveCount(0)
-  for (const path of ['/app/model-settings', '/app/users']) {
-    await page.goto(path)
-    await expect(page).toHaveURL('http://127.0.0.1:5174/')
-  }
-  expect(api.requests.some((req) => req.path === '/users' || req.path === '/model/settings' || req.path === '/source/snapshot')).toBe(false)
+  await page.getByRole('link', { name: 'Настройка модели', exact: true }).click()
+  await expect(page.getByRole('slider')).toHaveCount(4)
+  for (const field of await page.getByRole('spinbutton').all()) await expect(field).toBeDisabled()
+  for (const slider of await page.getByRole('slider').all()) await expect(slider).toBeDisabled()
+  await expect(page.getByLabel('Дата расчёта', { exact: true })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: '+ Добавить признак', exact: true })).toHaveCount(0)
+  await expect(page.getByText('Режим просмотра.', { exact: false })).toBeVisible()
+  await page.locator('.model-settings-form').evaluate((form) => form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
+  await page.goto('/app/users')
+  await expect(page).toHaveURL('http://127.0.0.1:5174/')
+  expect(api.requests.some((req) => req.path === '/users' || req.path === '/source/snapshot' || (req.path === '/model/settings' && req.method === 'PATCH'))).toBe(false)
+  expect(api.requests.some((req) => req.path === '/model/settings' && req.method === 'GET')).toBe(true)
 })
 
 test('administrator creates, edits and deletes managers', async ({ page }) => {
@@ -482,13 +503,18 @@ test('administrator uploads a snapshot after choosing and confirming a JSON file
   await page.getByRole('button', { name: 'Загрузить снимок', exact: true }).click()
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeDisabled()
-  const snapshot = { accounts: [], services: [], transactions: [] }
+  const snapshot = { accounts: [{ id: 1, email: 'snapshot@example.com', balance: 100, withdrawBalance: 0, totalReplenished: 100, bonusBalance: 0, bonusState: 'unlocked' }], services: [], transactions: [] }
   await dialog.locator('input[type=file]').setInputFiles({ name: 'snapshot.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(snapshot)) })
   await expect(dialog.getByText('snapshot.json', { exact: true })).toBeVisible()
   expect(api.requests.some((req) => req.path === '/source/snapshot')).toBe(false)
   await dialog.getByRole('button', { name: 'Заменить данные' }).click()
   await expect(page.getByText('Снимок загружен, оценки пересчитаны')).toBeVisible()
+  await expect(dialog.getByText('Аккаунтов: 1', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Услуг: 0', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Транзакций: 0', { exact: true })).toBeVisible()
   expect(api.requests.find((req) => req.path === '/source/snapshot')).toMatchObject({ method: 'PUT', body: snapshot })
+  await dialog.getByRole('button', { name: /Готово/ }).click()
+  await expect(dialog).toHaveCount(0)
 })
 
 test('expired SSE session returns to login and closes the stream', async ({ page }) => {
@@ -526,7 +552,7 @@ for (const failure of [500, 429, 'network'] as const) {
     api.refreshFailure = failure
     const refreshCalls = api.refreshCalls
     await page.getByRole('button', { name: 'СОХРАНИТЬ ИЗМЕНЕНИЯ' }).click()
-    const reason = failure === 'network' ? 'Нет соединения с сервером' : 'Обновление сессии временно недоступно'
+    const reason = failure === 'network' ? 'Нет соединения с сервером' : failure === 429 ? 'Слишком много запросов. Попробуйте позже.' : 'Обновление сессии временно недоступно'
     await expect(page.locator('.model-settings-form').getByRole('alert')).toContainText(reason)
     await expect(threshold).toHaveValue('75 баллов')
     await expect(page).toHaveURL(/\/app\/model-settings$/)
@@ -635,4 +661,92 @@ test('saving settings refreshes the summary and the customer data shown afterwar
   await expect(page.locator('.client-profile__risk')).toHaveText('НИЗКИЙ РИСК')
   await expect(page.locator('.client-risk-reasons__list')).toContainText('Автопродление восстановлено')
   await expect(page.locator('.client-profile__loss')).toHaveText('€1,23')
+})
+
+test('snapshot validation errors identify the record and field in Russian', async ({ page }) => {
+  const api = await setupApi(page)
+  api.snapshotError = { detail: [{ loc: ['body', 'accounts', 0, 'balance'], msg: 'Input should be greater than or equal to 0', type: 'greater_than_equal', ctx: { ge: 0 } }] }
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Загрузить снимок', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Загрузка снимка', exact: true })
+  const picker = dialog.locator('input[type=file]')
+  await picker.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') })
+  await expect(dialog.getByRole('alert')).toContainText('Проверьте формат файла')
+  await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeDisabled()
+  expect(api.requests.some((req) => req.path === '/source/snapshot')).toBe(false)
+  await picker.setInputFiles({ name: 'data.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ accounts: [{ balance: -1 }], services: [], transactions: [] })) })
+  await dialog.getByRole('button', { name: 'Заменить данные' }).click()
+  await expect(dialog.getByRole('alert')).toContainText('Аккаунты → запись 1 → Баланс')
+  await expect(dialog.getByRole('alert')).toContainText('Значение должно быть не меньше 0.')
+  await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeEnabled()
+})
+
+for (const failure of [403, 'network'] as const) {
+  test(`customer failure ${failure} shows an understandable error and can be retried`, async ({ page }) => {
+    const api = await setupApi(page)
+    api.customerFailure = failure
+    await page.goto('/app/clients')
+    const alert = page.locator('.client-risk-table').getByRole('alert')
+    await expect(alert).toContainText(failure === 403 ? 'Недостаточно прав' : 'Нет соединения с сервером')
+    await expect(page).toHaveURL(/\/app\/clients$/)
+    api.customerFailure = null
+    await alert.getByRole('button', { name: 'Повторить', exact: true }).click()
+    await expect(page.locator('.client-table-link')).toHaveCount(50)
+  })
+}
+
+test('login rate limit displays a Russian explanation without a refresh loop', async ({ page }) => {
+  const api = await setupApi(page, 'admin', false)
+  api.loginFailure = 429
+  await page.goto('/login')
+  await page.getByLabel('Логин', { exact: true }).fill('admin')
+  await page.getByLabel('Пароль', { exact: true }).fill('password123')
+  const refreshCalls = api.refreshCalls
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page.getByRole('alert')).toHaveText('Слишком много попыток входа. Попробуйте позже.')
+  await expect(page).toHaveURL(/\/login$/)
+  expect(api.refreshCalls).toBe(refreshCalls)
+  await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeEnabled()
+})
+
+test('administrator can change a manager login and password without sending unchanged fields', async ({ page }) => {
+  const api = await setupApi(page)
+  await page.goto('/app/users')
+  await page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'manager1', exact: true }) }).getByRole('button', { name: 'Изменить', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Логин', { exact: true }).fill('renamed_manager')
+  await dialog.getByLabel('Новый пароль (необязательно)', { exact: true }).fill('NewPassw0rd-2')
+  await dialog.getByRole('button', { name: 'Сохранить', exact: true }).click()
+  await expect(page.getByRole('cell', { name: 'renamed_manager', exact: true })).toBeVisible()
+  expect(api.requests.find((req) => req.method === 'PATCH' && req.path === `/users/${managerId}`)?.body).toEqual({ login: 'renamed_manager', password: 'NewPassw0rd-2' })
+})
+
+test('empty customer and manager lists have explicit empty states', async ({ page }) => {
+  const api = await setupApi(page)
+  api.customers = []
+  api.managers = []
+  await page.goto('/')
+  await expect(page.locator('.total-value')).toHaveText('0')
+  await expect(page.getByText('Клиентов пока нет', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Клиенты под риском', exact: true }).click()
+  await expect(page.getByText('Нет клиентов с выбранным уровнем риска', { exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Управление менеджерами', exact: true }).click()
+  await expect(page.getByText('Менеджеров пока нет', { exact: true })).toBeVisible()
+})
+
+test('live update text reflects a connected or interrupted event stream', async ({ page }) => {
+  await setupApi(page)
+  await page.goto('/')
+  const status = page.locator('.dashboard-updates')
+  await expect(status).toHaveText('Подключаем обновления…')
+  await emit(page, 'ready', '1')
+  await expect(status).toContainText('Обновляется в реальном времени')
+  await page.evaluate(() => {
+    const stream = (window as unknown as { streams: { readyState: number; onerror: () => void }[] }).streams.filter((item) => item.readyState !== 2).at(-1)!
+    stream.readyState = 0
+    stream.onerror()
+  })
+  await expect(status).toHaveText('Восстанавливаем соединение для обновлений…')
+  await emit(page, 'ready', '1')
+  await expect(status).toContainText('Обновляется в реальном времени')
 })

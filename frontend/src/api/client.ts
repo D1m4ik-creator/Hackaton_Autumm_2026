@@ -1,6 +1,7 @@
 import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, Method } from 'axios'
 import { message } from 'antd'
+import { formatApiError } from './error-message'
 
 const API_URL = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '')
 // Все роуты бэка, кроме /metrics, смонтированы под этим префиксом (backend/app/main.py)
@@ -24,17 +25,6 @@ export const http = axios.create({
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
-
-function extractMessage(data: unknown): string | null {
-  if (data && typeof data === 'object' && 'detail' in data) {
-    const detail = (data as { detail: unknown }).detail
-    if (typeof detail === 'string') return detail
-    if (Array.isArray(detail)) {
-      return detail.map((d) => (d as { msg?: string }).msg).filter(Boolean).join(', ')
-    }
-  }
-  return null
-}
 
 let refreshPromise: Promise<void> | null = null
 
@@ -91,7 +81,7 @@ http.interceptors.response.use(
       return http(originalRequest)
     }
 
-    const apiMessage = extractMessage(error.response.data) ?? error.message ?? 'Request failed'
+    const apiMessage = formatApiError(status, error.response.data, url)
     if (status === 401 && !isAuthAction(url)) window.dispatchEvent(new Event('session-expired'))
 
     // Своя ошибка на форме логина (login/refresh/logout) и тихий статус
