@@ -24,3 +24,6 @@ itsdangerous==2.2.0
 
 # Безопасный вычислитель формул для пользовательских метрик (app/ml/features/custom.py)
 simpleeval==1.0.8
+
+# Выгрузка клиентов в Excel (app/crud/customer_export.py)
+openpyxl==3.1.5

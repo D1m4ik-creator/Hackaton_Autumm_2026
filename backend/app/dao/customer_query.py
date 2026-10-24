@@ -58,9 +58,27 @@ async def query_customers(
     page_size: int,
 ) -> Sequence[Row]:
     """Страница клиентов: accounts LEFT JOIN risk_results, сортировка из белого списка, NULLS LAST"""
+    stmt = _list_stmt(levels, search, sort, order).limit(page_size).offset((page - 1) * page_size)
+    result = await session.execute(stmt)
+    return result.all()
+
+
+async def export_customers(
+    session: AsyncSession, *, levels: Sequence[str] | None, search: str | None, sort: str, order: str
+) -> Sequence[Row]:
+    """Все клиенты под фильтром (без пагинации) с полями счёта — для выгрузки в файл"""
+    stmt = _list_stmt(levels, search, sort, order).add_columns(
+        Account.withdraw_balance, Account.bonus_balance, Account.bonus_state
+    )
+    result = await session.execute(stmt)
+    return result.all()
+
+
+def _list_stmt(levels: Sequence[str] | None, search: str | None, sort: str, order: str):
+    """Общий SELECT списка и выгрузки: те же колонки, фильтр и порядок"""
     sort_col = SORT_COLUMNS.get(sort, RiskResult.score)
     direction = sort_col.desc() if order == "desc" else sort_col.asc()
-    stmt = (
+    return (
         select(
             Account.id,
             Account.email,
@@ -75,11 +93,7 @@ async def query_customers(
         .outerjoin(RiskResult, RiskResult.account_id == Account.id)
         .where(*_conditions(levels, search))
         .order_by(direction.nulls_last(), Account.id.asc())
-        .limit(page_size)
-        .offset((page - 1) * page_size)
     )
-    result = await session.execute(stmt)
-    return result.all()
 
 
 async def count_customers(
