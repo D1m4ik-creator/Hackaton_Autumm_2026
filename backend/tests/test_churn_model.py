@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from churn_model import (
+from app.predictt_model.churn_model import (
     ModelConfig,
     extract_features,
     predict_churn,

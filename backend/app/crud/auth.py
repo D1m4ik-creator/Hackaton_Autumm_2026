@@ -32,7 +32,7 @@ def _new_expires_at() -> datetime:
 
 
 def _admin_user() -> CurrentUser:
-    return CurrentUser(login=get_settings().admin.login, role="admin")
+    return CurrentUser(login=get_settings().admin.login, role="superadmin")
 
 
 async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUser | None:
@@ -72,8 +72,15 @@ async def get_current_user(token: str = Depends(get_token)) -> CurrentUser:
 
 
 async def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    """Пускает только главного администратора, иначе 403"""
-    if current_user.role != "admin":
+    """Пускает суперадмина и админов (управление менеджерами, настройки модели, данные), менеджеру 403"""
+    if current_user.role not in ("superadmin", "admin"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+    return current_user
+
+
+async def require_superadmin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Пускает только суперадмина, иначе 403"""
+    if current_user.role != "superadmin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
     return current_user
 

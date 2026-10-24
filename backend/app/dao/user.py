@@ -15,6 +15,9 @@ class UsersDAO(BaseDAO):
         return result.scalars().first()
 
     @classmethod
-    async def list_all(cls, session: AsyncSession) -> list[User]:
-        result = await session.execute(select(User).order_by(User.created_at, User.login))
+    async def list_all(cls, session: AsyncSession, role: str | None = None) -> list[User]:
+        query = select(User).order_by(User.created_at, User.login)
+        if role:
+            query = query.where(User.role == role)
+        result = await session.execute(query)
         return list(result.scalars().all())
