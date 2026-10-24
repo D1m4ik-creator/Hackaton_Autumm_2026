@@ -6,6 +6,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useRiskReportStore } from '../../../entities/risk-report'
 import { ThemeToggle } from '../../../features/switch-theme'
+import { clientsPath as resolveClientsPath, dashboardPath as resolveDashboardPath, modelSettingsPath as resolveModelSettingsPath } from '../../../shared/lib/app-paths'
 import { AezaLogo } from '../../../shared/ui/aeza-logo/AezaLogo'
 import './dashboard-shell.css'
 
@@ -24,9 +25,9 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
   const [menuOpen, setMenuOpen] = useState(false)
   const [metricsOpen, setMetricsOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
-  const dashboardPath = onSignOut ? '/' : '/dashboard'
-  const clientsPath = onSignOut ? '/app/clients' : '/clients'
-  const modelSettingsPath = onSignOut ? '/app/model-settings' : '/model-settings'
+  const dashboardPath = resolveDashboardPath(pathname)
+  const clientsPath = resolveClientsPath(pathname)
+  const modelSettingsPath = resolveModelSettingsPath(pathname)
   const navClassName = ({ isActive }: { isActive: boolean }) => `dashboard-nav__item ${isActive ? 'dashboard-nav__item--active' : ''}`
 
   async function signOut() {

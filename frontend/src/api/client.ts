@@ -67,19 +67,24 @@ http.interceptors.response.use(
 
     if (!error.response) {
       message.error('Нет соединения с сервером. Проверьте интернет и попробуйте снова.')
-      return Promise.reject(new ApiError(0, 'Network error'))
+      return Promise.reject(new ApiError(0, 'Нет соединения с сервером'))
     }
 
     const { status } = error.response
 
     if (status === 401 && originalRequest && !originalRequest._retry && !isAuthAction(url)) {
       originalRequest._retry = true
+      let refreshed = true
       try {
         await refreshSession()
-        return await http(originalRequest)
       } catch {
-        // refresh тоже не удался — отдаём исходную ошибку ниже
+        refreshed = false
       }
+      // Повторный запрос не оборачиваем в этот же try — если он упадёт по
+      // другой причине (например 500), его ошибка должна дойти до вызывающего
+      // кода как есть, а не быть подменена исходной 401-ошибкой ниже.
+      if (refreshed) return http(originalRequest)
+      // refresh тоже не удался — отдаём исходную ошибку ниже
     }
 
     const apiMessage = extractMessage(error.response.data) ?? error.message ?? 'Request failed'

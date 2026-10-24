@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes, useParams } from 'react-router-dom'
@@ -20,6 +20,7 @@ const MIN_SPLASH_MS = 900
 // кросс-фейдит его в контент приложение — без резкого обрыва анимации.
 function AuthGate({ children }: { children: ReactNode }) {
   const { isLoading } = useAuth()
+  const shouldReduceMotion = useReducedMotion()
   const [minTimeElapsed, setMinTimeElapsed] = useState(false)
 
   useEffect(() => {
@@ -33,8 +34,21 @@ function AuthGate({ children }: { children: ReactNode }) {
     <AnimatePresence mode="wait">
       {showSplash
         ? <SplashScreen key="splash" />
-        : <motion.div key="app" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4, ease: 'easeOut' }}>{children}</motion.div>}
+        : <motion.div key="app" initial={shouldReduceMotion ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: shouldReduceMotion ? 0 : 0.4, ease: 'easeOut' }}>{children}</motion.div>}
     </AnimatePresence>
+  )
+}
+
+// AuthProvider оборачивает и /login, и защищённые страницы одним общим
+// предком — переход после входа (navigate('/')) не пересоздаёт сессию.
+// AuthGate (сплэш, пока проверяется сессия) — только вокруг защищённой
+// части: форме логина не нужно ждать ни проверку сессии, ни искусственный
+// минимум показа сплэша.
+function AuthProviderLayout() {
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
   )
 }
 
@@ -43,11 +57,9 @@ function AuthGate({ children }: { children: ReactNode }) {
 // переанимироваться при каждой навигации, иначе весь экран "смазывается".
 function SessionLayout() {
   return (
-    <AuthProvider>
-      <AuthGate>
-        <Outlet />
-      </AuthGate>
-    </AuthProvider>
+    <AuthGate>
+      <Outlet />
+    </AuthGate>
   )
 }
 
@@ -83,12 +95,14 @@ export default function App() {
       <Route path="/clients" element={<Navigate to="/app/clients" replace />} />
       <Route path="/clients/:clientId" element={<RedirectToClientDetail />} />
       <Route path="/model-settings" element={<Navigate to="/app/model-settings" replace />} />
-      <Route element={<SessionLayout />}>
+      <Route element={<AuthProviderLayout />}>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/" element={<ProtectedRoute><AuthenticatedDashboard /></ProtectedRoute>} />
-        <Route path="/app/clients" element={<ProtectedRoute><AuthenticatedClients /></ProtectedRoute>} />
-        <Route path="/app/clients/:clientId" element={<ProtectedRoute><AuthenticatedClientDetail /></ProtectedRoute>} />
-        <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
+        <Route element={<SessionLayout />}>
+          <Route path="/" element={<ProtectedRoute><AuthenticatedDashboard /></ProtectedRoute>} />
+          <Route path="/app/clients" element={<ProtectedRoute><AuthenticatedClients /></ProtectedRoute>} />
+          <Route path="/app/clients/:clientId" element={<ProtectedRoute><AuthenticatedClientDetail /></ProtectedRoute>} />
+          <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

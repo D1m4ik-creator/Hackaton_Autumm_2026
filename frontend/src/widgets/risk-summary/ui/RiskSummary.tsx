@@ -2,6 +2,7 @@ import { Progress, Tooltip } from 'antd'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useRiskReportStore } from '../../../entities/risk-report'
 import { useClientFiltersStore } from '../../../features/filter-clients'
+import { clientsPath as resolveClientsPath } from '../../../shared/lib/app-paths'
 import { formatEuro, formatInteger, formatPercent } from '../../../shared/lib/format'
 import { BentoCard } from '../../../shared/ui/bento-card'
 
@@ -25,10 +26,7 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
   const report = useRiskReportStore((state) => state.report)
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  // Дашборд живёт на "/" (а не "/app/дашборд") — без явного учёта этого
-  // клик отсюда уводил на легаси-алиас "/clients" вне SessionLayout,
-  // что полностью перемонтировало AuthProvider и заново показывало сплэш.
-  const clientsPath = pathname === '/' || pathname.startsWith('/app/') ? '/app/clients' : '/clients'
+  const clientsPath = resolveClientsPath(pathname)
   const count = report[level]
   const percent = count / report.totalClients * 100
   const isHigh = level === 'high'

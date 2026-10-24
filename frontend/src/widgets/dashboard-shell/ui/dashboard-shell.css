@@ -1,8 +1,12 @@
 .dashboard-layout { min-height: 100dvh; background: var(--dashboard-bg); color: var(--dashboard-text); font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; transition: background-color 280ms ease, color 280ms ease; }
 .dashboard-layout *, .dashboard-layout *::before, .dashboard-layout *::after { box-sizing: border-box; }
 /* Плавная смена темы: цвета поверхностей/текста/границ в контенте
-   анимируются при переключении свитчера, а не меняются скачком. */
-.dashboard-main, .dashboard-main * { transition: background-color 280ms ease, color 280ms ease, border-color 280ms ease; }
+   анимируются при переключении свитчера, а не меняются скачком.
+   Исключаем svg/img — они красятся через fill/stroke или вообще не красятся,
+   background-color/color/border-color на них ничего не анимируют, а
+   transition-свойство на каждом вложенном <path> иконок и графиков — чистый
+   лишний расход на каждый кадр. */
+.dashboard-main, .dashboard-main :not(svg, svg *, img) { transition: background-color 280ms ease, color 280ms ease, border-color 280ms ease; }
 .dashboard-layout button, .dashboard-layout a { -webkit-tap-highlight-color: transparent; }
 .dashboard-layout button { font-family: inherit; }
 .dashboard-layout button:focus-visible, .dashboard-layout a:focus-visible { outline: 2px solid var(--dashboard-accent); outline-offset: 4px; }

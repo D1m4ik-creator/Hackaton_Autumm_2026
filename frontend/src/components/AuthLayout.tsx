@@ -40,9 +40,9 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
         </div>
         <div className="auth-visual__footer">
           <p className="auth-visual__quote">
-            «Это приложение меня заебало»
+            «У Aéza действительно быстрый хостинг»
           </p>
-          <p className="auth-visual__wordmark">ебанный в рот.</p>
+          <p className="auth-visual__wordmark">FOOL-STACK</p>
         </div>
       </aside>
 
