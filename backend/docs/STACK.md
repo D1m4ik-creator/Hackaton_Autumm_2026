@@ -24,12 +24,16 @@ db/migration/    Alembic
 dao/             запросы к БД (BaseDAO + по классу на сущность)
 crud/            бизнес-логика над DAO, зависимости (get_current_user и т.п.)
 routers/         тонкие эндпоинты
-analysis/        модель риска оттока за интерфейсом (чистый Python, без БД и HTTP)
+analysis/        контракт модели риска и адаптер churn.py (чистый Python, без БД и HTTP)
+ml/              логистическая модель оттока churn_model.py (стандартная библиотека;
+                 возвращает оценку риска 0..100, веса задаёт пользователь)
 ```
 
-Пакет `analysis/` принадлежит ML-команде: инфраструктура знает только контракт
-(`default_settings`, `validate_settings`, `analyze`) и типы из `analysis/types.py`.
-Сейчас подключена заглушка `analysis/stub.py`. Подробности — в [ARCHITECTURE.md](ARCHITECTURE.md).
+Инфраструктура знает только контракт `analysis/` (`default_settings`,
+`validate_settings`, `analyze`) и типы из `analysis/types.py`. Контракт реализует
+адаптер `analysis/churn.py` поверх модели `ml/churn_model.py` (логистический
+скоринг, веса приходят из настроек пользователя). Подробности и описание модели — в
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
 Поток запроса: `router -> crud -> dao -> БД`. Роутер ничего не знает про SQL, DAO ничего не знает про HTTP.
 

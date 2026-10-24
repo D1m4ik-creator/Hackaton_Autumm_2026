@@ -3,13 +3,15 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.engine import SessionLocal
 from app.core.security import (
+    ACCESS_COOKIE,
     DUMMY_HASH,
+    REFRESH_COOKIE,
     access_decode_token,
     create_access_token,
     create_refresh_token,
@@ -24,6 +26,32 @@ from app.dao.session import SessionsDAO
 from app.dao.user import UsersDAO
 from app.db.models.sessions import AuthSession
 from app.db.schemas.auth import CurrentUser
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
+    """Ставит cookie с токенами; refresh=None — оставить в браузере текущий refresh.
+
+    Общий хелпер для локального логина (routers/auth.py) и колбэка OIDC
+    (routers/oidc.py) — обе точки входа должны производить одинаковую сессию.
+    """
+    settings = get_settings()
+    response.set_cookie(
+        key=ACCESS_COOKIE,
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=settings.jwt.access_token_expire_minutes * 60,
+    )
+    if refresh_token:
+        response.set_cookie(
+            key=REFRESH_COOKIE,
+            value=refresh_token,
+            httponly=True,
+            samesite="lax",
+            secure=settings.cookie_secure,
+            max_age=settings.jwt.refresh_token_expire_days * 60 * 60 * 24,
+        )
 
 
 def _new_expires_at() -> datetime:
@@ -51,21 +79,35 @@ async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUs
     return CurrentUser(login=user.login, role=user.role, email=user.email)
 
 
-async def find_user(login: str) -> CurrentUser | None:
-    """Пользователь по логину из токена; менеджер проверяется по БД на каждом запросе (удалённый теряет доступ сразу)"""
+SUPERADMIN_UID = "superadmin"
+# Отличает «uid не передан» (старый вызов без проверки) от «uid передан и равен None»
+_UID_UNSET = object()
+
+
+async def find_user(login: str, uid=_UID_UNSET) -> CurrentUser | None:
+    """Пользователь по логину из токена; менеджер проверяется по БД на каждом запросе (удалённый теряет доступ сразу).
+
+    Если передан uid, он сверяется с текущим пользователем: токен менеджера обязан нести uid, равный
+    str(user.id) (удалённый и заново созданный с тем же логином менеджер не подхватит старый токен);
+    токен без uid допустим только для суперадмина. Без аргумента uid проверка пропускается.
+    """
     if login == get_settings().admin.login:
+        if uid is not _UID_UNSET and uid is not None and uid != SUPERADMIN_UID:
+            return None
         return _admin_user()
     # Короткая своя сессия: ручка SSE не должна держать соединение с БД всё время потока
     async with SessionLocal() as db:
         user = await UsersDAO.find_one_or_none(db, login=login)
     if not user:
         return None
+    if uid is not _UID_UNSET and uid != str(user.id):
+        return None
     return CurrentUser(login=user.login, role=user.role, email=user.email)
 
 
 async def get_current_user(token: str = Depends(get_token)) -> CurrentUser:
     payload = access_decode_token(token)
-    user = await find_user(payload.get("sub", ""))
+    user = await find_user(payload.get("sub", ""), payload.get("uid"))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
     return user
@@ -85,17 +127,26 @@ async def require_superadmin(current_user: CurrentUser = Depends(get_current_use
     return current_user
 
 
-def _issue_pair(login: str, session_id: uuid.UUID) -> tuple[str, str]:
-    access_token = create_access_token({"sub": login})
-    refresh_token = create_refresh_token({"sub": login, "sid": str(session_id)})
+def _issue_pair(login: str, uid: str, session_id: uuid.UUID) -> tuple[str, str]:
+    access_token = create_access_token({"sub": login, "uid": uid})
+    refresh_token = create_refresh_token({"sub": login, "uid": uid, "sid": str(session_id)})
     return access_token, refresh_token
+
+
+async def _resolve_uid(db: AsyncSession, login: str) -> str:
+    """uid для токена: суперадмин (.env) -> 'superadmin', менеджер/админ -> str(user.id)"""
+    if login == get_settings().admin.login:
+        return SUPERADMIN_UID
+    user = await UsersDAO.find_one_or_none(db, login=login)
+    return str(user.id) if user else SUPERADMIN_UID
 
 
 async def start_session(db: AsyncSession, login: str) -> tuple[str, str]:
     """Создаёт сессию входа и возвращает пару токенов (access, refresh)"""
     await SessionsDAO.delete_expired(db)
+    uid = await _resolve_uid(db, login)
     session_id = uuid.uuid4()
-    access_token, refresh_token = _issue_pair(login, session_id)
+    access_token, refresh_token = _issue_pair(login, uid, session_id)
     expires_at = _new_expires_at()
     await SessionsDAO.add(
         db, id=session_id, login=login, refresh_token_hash=hash_token(refresh_token), expires_at=expires_at
@@ -124,12 +175,13 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> tuple[s
     token_hash = hash_token(refresh_token)
 
     login = payload.get("sub", "")
-    if not await find_user(login):
-        # Менеджера удалили: все его сессии закрываются
+    uid = payload.get("uid")
+    if not await find_user(login, uid):
+        # Менеджера удалили (или заново создали с тем же логином — uid не совпадёт): сессии закрываются
         await SessionsDAO.delete_by_login(db, login)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token не действителен")
 
-    access_token, new_refresh_token = _issue_pair(login, session_id)
+    access_token, new_refresh_token = _issue_pair(login, uid or SUPERADMIN_UID, session_id)
     if await SessionsDAO.rotate_refresh_hash(
         db, session_id, token_hash, hash_token(new_refresh_token), _new_expires_at()
     ):

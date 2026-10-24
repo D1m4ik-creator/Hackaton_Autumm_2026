@@ -26,7 +26,8 @@
 
 ```
 backend/app/
-  analysis/            __init__.py (точка входа), types.py (вход/выход), stub.py (заглушка)
+  analysis/            __init__.py (точка входа), types.py (вход/выход), churn.py (адаптер модели)
+  ml/                  churn_model.py (логистическая модель оттока)
   core/config.py       + source_data_path, seed_on_startup, sse_poll_interval_seconds
   db/models/           account, service, transaction, model_settings, risk_result, risk_summary
   db/schemas/          common (CamelModel), source, customers, analytics, model_settings
@@ -164,7 +165,7 @@ class AnalysisResult:
     loss_explanation: str          # смысл денежной суммы для панели
 ```
 
-`app/analysis/__init__.py` — единственная точка входа (импортирует реализацию; сейчас из `stub.py`):
+`app/analysis/__init__.py` — единственная точка входа (импортирует реализацию; сейчас из адаптера `churn.py`):
 
 ```python
 def default_settings() -> dict          # настройки по умолчанию, JSON-сериализуемые
@@ -177,9 +178,9 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
 - Проверка результата (`crud/recalc.py::check_result`): `score` int 0..100 или `None`; `None` ⇔ `no_data`; `expected_loss_cents` int ≥ 0; `account_id` из снимка, без повторов. Клиент без результата → `no_data`, причина «Модель не вернула оценку». Нарушение контракта → `AnalysisContractError` (транзакция откатывается, ответ 500 «Ошибка модели анализа: …»).
 - `analyze` вызывается через `asyncio.to_thread` — не блокирует цикл событий.
 
-Заглушка `app/analysis/stub.py`: `default_settings() -> {"asOf": None}`; `validate_settings` проверяет, что `data` — объект, а `asOf` — `null` или дата ISO, иначе `ValueError`; `analyze` возвращает каждому клиенту `score=None`, `level="no_data"`, `reasons=[Reason("model_not_connected", "Модель анализа ещё не подключена")]`, `expected_loss_cents=0`; `loss_explanation = "Модель анализа ещё не подключена, денежная оценка не считается"`.
+Реализация (подключена): адаптер `app/analysis/churn.py` поверх логистической модели `app/ml/churn_model.py`. Модель возвращает оценку риска `score` 0..100 (или `None`, если данных нет); весов по умолчанию у неё нет — их задаёт пользователь через настройки. `default_settings()` отдаёт `asOf`, веса признаков (стартовые экспертные значения из `_DEFAULT_WEIGHTS` адаптера), `bias`, пороги уровней, `expiresSoonDays`, `horizonDays`; `validate_settings` нормализует присутствующие ключи и сохраняет неизвестные; `analyze` переводит `score` модели в уровень `high/medium/low`, считает денежную оценку потерь, а клиентам без услуг и транзакций ставит `no_data`. Признаки, формула score и порогов, формула потерь и таблица настроек — в [ARCHITECTURE.md](ARCHITECTURE.md).
 
-Как ML-команде подключить модель: реализовать три функции в своих модулях пакета `app/analysis/` и поменять импорт в `__init__.py`. Новый признак/коэффициент — правка внутри пакета и, при необходимости, ключ в `default_settings()`; БД, ручки и фронт-контракт не меняются (настройки — JSON, причины и `details` — списки/объекты).
+Как расширять модель: добавить признак в `extract_features` (`app/ml/churn_model.py`) и вес в `default_settings()` или через `PATCH /model/settings`; БД, ручки и фронт-контракт не меняются (настройки — JSON, причины и `details` — списки/объекты).
 
 ## 6. Пересчёт
 
@@ -382,7 +383,7 @@ churn_recalculations_total 3
 
 **P1 — Хранилище и снимок** (зависимостей нет). Файлы: `backend/app/core/config.py`, `backend/app/db/models/__init__.py`, `backend/app/db/models/{account,service,transaction,model_settings,risk_result,risk_summary}.py`, `backend/app/db/migration/versions/2026_10_24_1200-3f9a1c2b7d4e_create_churn_tables.py`, `backend/app/db/schemas/common.py`, `backend/app/db/schemas/source.py`, `backend/app/dao/base.py`, `backend/app/dao/{account,service,transaction,model_settings,risk_result,risk_summary}.py`, `backend/app/crud/source.py`. Сделать §3, §4, поля `Config` (§4.3, §7). Проверка: `alembic upgrade head` и `downgrade -1` на локальной базе (порт 5433), CHECK на месте.
 
-**P2 — Интерфейс анализа и пересчёт** (зависит от P1). Файлы: `backend/app/analysis/__init__.py`, `backend/app/analysis/types.py`, `backend/app/analysis/stub.py`, `backend/app/crud/recalc.py`. Сделать §5, §6. Проверка: скриптом на локальной базе `startup()` на пустой базе грузит `origin_data/data.json`, все 10 клиентов `no_data`, `version` растёт; два параллельных `apply_snapshot` выполняются по очереди.
+**P2 — Интерфейс анализа и пересчёт** (зависит от P1). Файлы: `backend/app/analysis/__init__.py`, `backend/app/analysis/types.py`, `backend/app/analysis/churn.py` (адаптер) и `backend/app/ml/churn_model.py` (модель), `backend/app/crud/recalc.py`. Сделать §5, §6. Проверка: скриптом на локальной базе `startup()` на пустой базе грузит `origin_data/data.json`, клиенты получают `score` и уровни риска, `version` растёт; два параллельных `apply_snapshot` выполняются по очереди.
 
 **P3 — API, SSE, metrics** (зависит от P1, P2). Файлы: `backend/app/db/schemas/{customers,analytics,model_settings}.py`, `backend/app/dao/customer_query.py`, `backend/app/crud/{customers,analytics,model_settings,metrics}.py`, `backend/app/routers/{customers,analytics,model_settings,source,events,metrics}.py`, `backend/app/main.py` (роутеры: `/metrics` без префикса, остальные с `API_PREFIX`; lifespan из §6.4). Сделать §7, §8, §9. Проверка: без cookie все ручки, кроме `/metrics`, дают 401; сортировка по каждому полю в обе стороны; PATCH и PUT поднимают `version`, открытый `/events` присылает `recalculated`; суммы `/metrics` = `/analytics/summary`.
 

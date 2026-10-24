@@ -48,5 +48,80 @@ services:
       - api
     restart: unless-stopped
 
+  # --- Authentik: отдельный OIDC-провайдер для входа в панель (backend/app/routers/oidc.py) ---
+  # Своя БД и Redis, изолированные от основного Postgres — наружу не публикуются,
+  # поэтому фиксированные учётные данные ниже не секрет (виден только внутри сети compose).
+  authentik-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: authentik
+      POSTGRES_DB: authentik
+    volumes:
+      - authentik-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U authentik -d authentik"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  authentik-redis:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.2
+    command: server
+    # AUTHENTIK_SECRET_KEY и AUTHENTIK_BOOTSTRAP_* — настоящие секреты, берутся из backend/.env
+    env_file:
+      - ./backend/.env
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_REDIS__HOST: authentik-redis
+    volumes:
+      - authentik-media:/media
+      - authentik-certs:/certs
+    ports:
+      - "9000:9000"
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.2
+    command: worker
+    env_file:
+      - ./backend/.env
+    environment:
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_REDIS__HOST: authentik-redis
+    volumes:
+      - authentik-media:/media
+      - authentik-certs:/certs
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  authentik-db-data:
+  authentik-media:
+  authentik-certs:

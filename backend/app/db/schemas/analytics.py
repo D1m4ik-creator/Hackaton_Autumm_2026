@@ -27,3 +27,24 @@ class SummaryOut(CamelModel):
     as_of: UtcDateTime | None
     recalculated_at: UtcDateTime | None
     version: int
+
+
+class ChurnTrendBucket(CamelModel):
+    """Одна неделя графика оттока: услуги с истечением в этот период"""
+
+    period_start: UtcDateTime
+    period_end: UtcDateTime
+    # Период уже прошёл (факт по реальному текущему статусу услуг) или
+    # ещё впереди (прогноз по уже посчитанному риску аккаунта-владельца)
+    is_forecast: bool
+    expired_services: int
+    churned_services: int
+
+
+class ChurnTrendOut(CamelModel):
+    """График оттока по неделям (GET /analytics/churn-trend)"""
+
+    buckets: list[ChurnTrendBucket]
+    # Активные сейчас услуги, чей аккаунт-владелец в зоне high/medium риска
+    at_risk_services: int
+    generated_at: UtcDateTime

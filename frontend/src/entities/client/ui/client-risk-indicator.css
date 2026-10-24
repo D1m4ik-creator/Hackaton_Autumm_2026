@@ -1,9 +1,12 @@
 .client-risk-indicator {
   display: inline-flex;
-  width: 40px;
-  height: 40px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
   vertical-align: middle;
 }
 
 .client-risk-indicator .ant-progress-indicator { color: var(--dashboard-text); font-size: 11px; font-weight: 700; }
+.client-risk-indicator__level { color: var(--dashboard-muted); font-size: 11px; line-height: 14px; }
 .client-risk-indicator:focus-visible { outline: 2px solid #db6600; outline-offset: 4px; border-radius: 50%; }

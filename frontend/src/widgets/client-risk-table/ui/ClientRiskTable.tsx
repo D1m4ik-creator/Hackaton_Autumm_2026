@@ -1,35 +1,40 @@
-import { Empty, Table } from 'antd'
+import { Alert, Button, Empty, Table } from 'antd'
 import type { TableColumnsType, TableProps } from 'antd'
-import { useMemo } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { ClientRiskIndicator, mockClients } from '../../../entities/client'
+import { ClientRiskIndicator } from '../../../entities/client'
+import { getCustomers } from '../../../api/customers'
+import { useApiResource } from '../../../api/useApiResource'
 import type { Client } from '../../../entities/client'
-import { filterClientsByRisk, sortClients, useClientFiltersStore } from '../../../features/filter-clients'
+import { useClientFiltersStore } from '../../../features/filter-clients'
 import type { ClientSortField } from '../../../features/filter-clients'
 import { clientDetailPath } from '../../../shared/lib/app-paths'
-import { formatEuro, formatEuroCents } from '../../../shared/lib/format'
-import { useInfiniteList } from '../../../shared/lib/infinite-list/useInfiniteList'
-import { InfiniteScrollSentinel } from '../../../shared/ui/infinite-scroll-sentinel/InfiniteScrollSentinel'
+import { formatEuroCents } from '../../../shared/lib/format'
 import './client-risk-table.css'
 
 export function ClientRiskTable() {
   const filters = useClientFiltersStore()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  // Переход риск-фильтра меняет состав списка (сбрасываем пагинацию ниже),
-  // а сортировка — только порядок тех же строк, поэтому считаем их отдельными
-  // useMemo: инфинит-скроллу нужна стабильная ссылка именно на отфильтрованный
-  // (ещё не отсортированный) список, чтобы не сбрасывать уже подгруженные
-  // страницы при одной лишь смене сортировки.
-  const riskFilteredClients = useMemo(
-    () => filterClientsByRisk(mockClients, filters.risk),
-    [filters.risk],
-  )
-  const sortedClients = useMemo(
-    () => sortClients(riskFilteredClients, filters.sortField, filters.sortOrder),
-    [riskFilteredClients, filters.sortField, filters.sortOrder],
-  )
-  const { visibleItems: visibleClients, hasMore, loadMore } = useInfiniteList(sortedClients, undefined, riskFilteredClients)
+  const [search, setSearch] = useState(filters.search)
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(filters.search.trim()), 300)
+    return () => clearTimeout(timer)
+  }, [filters.search])
+  const queryKey = `${filters.risk}|${search}|${filters.sortField}|${filters.sortOrder}`
+  const [pagination, setPagination] = useState({ key: queryKey, page: 1, pageSize: 50 })
+  const page = pagination.key === queryKey ? pagination.page : 1
+  const { pageSize } = pagination
+  const loader = useCallback(() => getCustomers({
+    level: filters.risk === 'all' ? undefined : filters.risk,
+    search: search || undefined,
+    sort: filters.sortField ?? 'riskScore', order: filters.sortOrder === 'ascend' ? 'asc' : 'desc', page, pageSize,
+  }), [filters.risk, filters.sortField, filters.sortOrder, search, page, pageSize])
+  const { data, loading, error, reload } = useApiResource(loader)
+
+  if (data && page > 1 && (page - 1) * pageSize >= data.total) {
+    setPagination({ key: queryKey, page: Math.max(1, Math.ceil(data.total / pageSize)), pageSize })
+  }
 
   function openClient(client: Client) {
     navigate(clientDetailPath(pathname, client.accountId))
@@ -43,35 +48,40 @@ export function ClientRiskTable() {
   })
 
   const columns: TableColumnsType<Client> = [
-    { ...sortable('accountId'), title: 'ID', dataIndex: 'accountId', width: 98, className: 'client-id-column', render: (id: number) => `#${id}` },
-    { ...sortable('name'), title: 'КЛИЕНТ / EMAIL', dataIndex: 'name', width: 270,
-      render: (_, client) => <Link className="client-table-link" to={clientDetailPath(pathname, client.accountId)} title={`${client.name} · ${client.email}`} aria-label={`Открыть клиента ${client.name}`} onClick={(event) => event.stopPropagation()}>{client.name} · {client.email}</Link> },
-    { ...sortable('balanceCents'), title: 'БАЛАНС', dataIndex: 'balanceCents', width: 144, align: 'center', render: formatEuroCents },
-    { ...sortable('totalReplenishedCents'), title: 'ПОПОЛНЕНИЯ', dataIndex: 'totalReplenishedCents', width: 160, align: 'center', render: (cents: number) => formatEuro(cents / 100) },
-    { ...sortable('score'), title: 'RISK', dataIndex: 'score', align: 'right', className: 'client-risk-column', render: (_, client) => <ClientRiskIndicator client={client} /> },
+    { ...sortable('id'), title: 'ID', dataIndex: 'accountId', width: 98, className: 'client-id-column', render: (id: number) => `#${id}` },
+    { ...sortable('email'), title: 'EMAIL', dataIndex: 'email', width: 270,
+      render: (_, client) => <div>
+        <Link className="client-table-link" to={clientDetailPath(pathname, client.accountId)} title={client.email} aria-label={`Открыть клиента ${client.email}`} onClick={(event) => event.stopPropagation()}>{client.email}</Link>
+        {client.reason && <p className="client-table-reason">{client.reason}</p>}
+      </div> },
+    { ...sortable('balance'), title: 'БАЛАНС', dataIndex: 'balanceCents', width: 144, align: 'center', render: formatEuroCents },
+    { ...sortable('totalReplenished'), title: 'ПОПОЛНЕНИЯ', dataIndex: 'totalReplenishedCents', width: 160, align: 'center', render: formatEuroCents },
+    { ...sortable('riskScore'), title: 'RISK', dataIndex: 'score', align: 'right', className: 'client-risk-column', render: (_, client) => <ClientRiskIndicator client={client} /> },
   ]
 
-  const handleChange: TableProps<Client>['onChange'] = (_, __, sorter) => {
+  const handleChange: TableProps<Client>['onChange'] = (nextPage, __, sorter, extra) => {
     const selectedSort = Array.isArray(sorter) ? sorter[0] : sorter
     filters.setSort(selectedSort.order ? selectedSort.columnKey as ClientSortField : null, selectedSort.order ?? null)
+    setPagination({ key: extra.action === 'sort' ? '' : queryKey, page: nextPage.current ?? 1, pageSize: nextPage.pageSize ?? pageSize })
   }
 
   return (
     <section className="client-risk-table" aria-label="Таблица клиентов под риском">
+      {error && <Alert type="error" showIcon title="Не удалось загрузить клиентов" description={error} action={<Button onClick={reload}>Повторить</Button>} />}
       <Table<Client>
         rowKey="id"
         tableLayout="fixed"
         columns={columns}
-        dataSource={visibleClients}
-        pagination={false}
+        dataSource={data?.items ?? []}
+        loading={loading}
+        pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [20, 50, 100, 200] }}
         showSorterTooltip={false}
         onChange={handleChange}
         onRow={(client) => ({ onClick: () => openClient(client) })}
         scroll={{ x: 900 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Нет клиентов с выбранным уровнем риска" /> }}
       />
-      <InfiniteScrollSentinel hasMore={hasMore} onIntersect={loadMore} />
-      <span className="visually-hidden" role="status" aria-live="polite">Показано клиентов: {visibleClients.length} из {riskFilteredClients.length}</span>
+      <span className="visually-hidden" role="status" aria-live="polite">Показано клиентов: {data?.items.length ?? 0} из {data?.total ?? 0}</span>
     </section>
   )
 }

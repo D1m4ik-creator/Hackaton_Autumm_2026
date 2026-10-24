@@ -7,4 +7,5 @@ export interface ModelFeature {
 export interface ModelSettings {
   features: ModelFeature[]
   thresholds: { high: number; medium: number }
+  asOf: string | null
 }

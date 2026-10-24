@@ -1,4 +1,4 @@
-export type RiskLevel = 'high' | 'medium' | 'low'
+export type RiskLevel = 'high' | 'medium' | 'low' | 'no_data'
 
 export interface Client {
   id: string
@@ -6,11 +6,10 @@ export interface Client {
   name: string
   email: string
   risk: RiskLevel
-  score: number
+  score: number | null
   revenueAtRisk: number
   balanceCents: number
   totalReplenishedCents: number
-  lastActivity: string
   reason: string
 }
 
@@ -18,4 +17,5 @@ export const riskLabels: Record<RiskLevel, string> = {
   high: 'Высокий',
   medium: 'Средний',
   low: 'Низкий',
+  no_data: 'нет оценки',
 }

@@ -1,5 +1,6 @@
 import type { ModelSettings } from './types'
 
+// Initial values from the original form, used until the API supplies these fields.
 export const defaultModelSettings: ModelSettings = {
   features: [
     { id: 'prolong_wait', name: 'Ожидает оплаты (prolong_wait)', weight: 0.42 },
@@ -8,4 +9,5 @@ export const defaultModelSettings: ModelSettings = {
     { id: 'replenishment_drop', name: 'Падение активности пополнений', weight: 0.12 },
   ],
   thresholds: { high: 70, medium: 35 },
+  asOf: null,
 }

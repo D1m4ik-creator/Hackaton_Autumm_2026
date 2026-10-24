@@ -1,7 +1,7 @@
 import { Avatar, Tag } from 'antd'
 import { riskLabels } from '../../../entities/client'
 import type { ClientDetail } from '../../../entities/client'
-import { formatEuro } from '../../../shared/lib/format'
+import { formatEuro, formatEuroCents } from '../../../shared/lib/format'
 import './client-profile.css'
 
 export function ClientProfile({ detail }: { detail: ClientDetail }) {
@@ -18,13 +18,12 @@ export function ClientProfile({ detail }: { detail: ClientDetail }) {
         </div>
       </div>
       <div className="client-profile__tags">
-        <Tag className="client-profile__risk">{riskLabels[client.risk].toLocaleUpperCase('ru')} РИСК</Tag>
-        <Tag className="client-profile__status">{detail.status.toUpperCase()}</Tag>
+        <Tag className="client-profile__risk">{client.risk === 'no_data' ? 'нет оценки' : `${riskLabels[client.risk].toLocaleUpperCase('ru')} РИСК`}</Tag>
       </div>
       <div className="client-profile__divider" />
       <dl className="client-profile__stats">
-        <div><dt>Risk-score</dt><dd>{client.score}</dd></div>
-        <div><dt>Баланс</dt><dd>{formatEuro(client.balanceCents / 100)}</dd></div>
+        <div><dt>Risk-score</dt><dd>{client.score ?? 'нет оценки'}</dd></div>
+        <div><dt>Баланс</dt><dd>{formatEuroCents(client.balanceCents)}</dd></div>
         <div><dt>Потери</dt><dd className="client-profile__loss">{formatEuro(client.revenueAtRisk)}</dd></div>
       </dl>
     </section>

@@ -5,3 +5,4 @@
 .risk-badge--high.ant-tag { color: var(--dashboard-accent); background: var(--dashboard-badge-high-bg); }
 .risk-badge--medium.ant-tag { color: var(--dashboard-badge-medium-text); background: var(--dashboard-badge-medium-bg); }
 .risk-badge--low.ant-tag { color: var(--dashboard-muted); background: var(--dashboard-badge-low-bg); }
+.risk-badge--no_data.ant-tag { color: var(--dashboard-muted); background: var(--dashboard-badge-low-bg); }

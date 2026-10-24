@@ -1,13 +1,16 @@
 import { MenuOutlined } from '@ant-design/icons'
-import { App, Button, Drawer, Modal } from 'antd'
+import { App, Button, Drawer } from 'antd'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useRiskReportStore } from '../../../entities/risk-report'
+import { METRICS_URL } from '../../../api/client'
 import { ThemeToggle } from '../../../features/switch-theme'
 import { clientsPath as resolveClientsPath, dashboardPath as resolveDashboardPath, modelSettingsPath as resolveModelSettingsPath } from '../../../shared/lib/app-paths'
+import { isAdminRole, isSuperadmin } from '../../../shared/lib/roles'
 import { AezaLogo } from '../../../shared/ui/aeza-logo/AezaLogo'
+import { useAuth } from '../../../context/AuthContext'
+import { SnapshotUpload } from '../../../features/upload-snapshot/SnapshotUpload'
 import './dashboard-shell.css'
 
 interface DashboardShellProps {
@@ -21,9 +24,11 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
   const { pathname } = useLocation()
   const shouldReduceMotion = useReducedMotion()
   const { message } = App.useApp()
-  const report = useRiskReportStore((state) => state.report)
+  const { user } = useAuth()
+  const isAdmin = isAdminRole(user?.role)
+  const usersNavLabel = isSuperadmin(user?.role) ? 'Управление пользователями' : 'Управление менеджерами'
   const [menuOpen, setMenuOpen] = useState(false)
-  const [metricsOpen, setMetricsOpen] = useState(false)
+  const [snapshotOpen, setSnapshotOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const dashboardPath = resolveDashboardPath(pathname)
   const clientsPath = resolveClientsPath(pathname)
@@ -55,7 +60,10 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
       <NavLink to={dashboardPath} end className={navClassName} onClick={() => setMenuOpen(false)}>Дашборд</NavLink>
       <NavLink to={clientsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Клиенты под риском</NavLink>
       <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>
-      <button className="dashboard-nav__item" onClick={() => closeMenu(() => setMetricsOpen(true))}>Метрики /metrics</button>
+      <NavLink to="/app/churn-trend" className={navClassName} onClick={() => setMenuOpen(false)}>График оттока</NavLink>
+      {isAdmin && <NavLink to="/app/users" className={navClassName} onClick={() => setMenuOpen(false)}>{usersNavLabel}</NavLink>}
+      {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setSnapshotOpen(true))}>Загрузить снимок</button>}
+      <a className="dashboard-nav__item" href={METRICS_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>Метрики /metrics</a>
     </nav>
     <div className="dashboard-sidebar-footer">
       <Button className="dashboard-signout" type="text" onClick={signOut} loading={isSigningOut}>Выйти</Button>
@@ -85,12 +93,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
           </motion.div>
         </AnimatePresence>
       </main>
-      <Modal open={metricsOpen} title="Метрики модели" onCancel={() => setMetricsOpen(false)} footer={<Button onClick={() => setMetricsOpen(false)}>Закрыть</Button>}>
-        <div>
-          <p>Демонстрационный снимок на 24 октября 2026 года.</p>
-          <pre className="metrics-preview">{`retain_clients_total ${report.totalClients}\nretain_clients_high_risk ${report.high}\nretain_clients_medium_risk ${report.medium}\nretain_clients_low_risk ${report.low}\nretain_revenue_at_risk_eur ${report.revenueAtRisk}`}</pre>
-        </div>
-      </Modal>
+      {isAdmin && <SnapshotUpload open={snapshotOpen} onClose={() => setSnapshotOpen(false)} />}
     </div>
   )
 }

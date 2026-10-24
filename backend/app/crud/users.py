@@ -77,13 +77,14 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
     if "password" in values:
         values["password_hash"] = await asyncio.to_thread(get_password_hash, values.pop("password"))
     try:
-        await UsersDAO.update_by_id(db, user.id, **values)
+        await UsersDAO.update_by_id_no_commit(db, user.id, **values)
+        if "login" in values or "password_hash" in values:
+            # Смена логина или пароля закрывает старые сессии менеджера в той же транзакции
+            await SessionsDAO.delete_by_login_no_commit(db, old_login)
+        await db.commit()
     except IntegrityError:
         await db.rollback()
         raise _conflict("Логин или почта уже заняты")
-    if "login" in values or "password_hash" in values:
-        # Смена логина или пароля закрывает старые сессии менеджера
-        await SessionsDAO.delete_by_login(db, old_login)
     await db.refresh(user)
     return user
 
@@ -91,5 +92,11 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
 async def delete_user(db: AsyncSession, user_id: uuid.UUID, actor: CurrentUser) -> None:
     user = await _get_or_404(db, user_id)
     _check_can_manage(actor, user)
-    await SessionsDAO.delete_by_login(db, user.login)
-    await UsersDAO.delete_by_id(db, user.id)
+    # Удаление пользователя и закрытие его сессий — одним commit
+    try:
+        await SessionsDAO.delete_by_login_no_commit(db, user.login)
+        await UsersDAO.delete_by_id_no_commit(db, user.id)
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise _conflict("Не удалось удалить пользователя")

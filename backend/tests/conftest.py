@@ -22,6 +22,7 @@ assert os.environ["POSTGRES_DB"].endswith("_test"), "тестовая база �
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5433")
 os.environ.setdefault("JWT_SECRET_KEY", "0" * 64)
+os.environ.setdefault("SESSION_SECRET_KEY", "2" * 64)
 os.environ.setdefault("JWT_REFRESH_SECRET_KEY", "1" * 64)
 os.environ.setdefault("ADMIN_LOGIN", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "test_password")

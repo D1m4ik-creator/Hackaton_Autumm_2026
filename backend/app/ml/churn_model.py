@@ -1,13 +1,17 @@
-"""Модуль предсказания оттока клиентов хостинг-платформы.
+"""Модуль оценки риска оттока клиентов хостинг-платформы.
 
 Исторических данных для обучения нет, поэтому используется логистическая
-модель с экспертно заданными весами (weighted scoring):
+модель (weighted scoring):
 
     risk = sigmoid(w1*x1 + w2*x2 + ... + b)
 
-Все коэффициенты живут в ``ModelConfig`` и редактируются без изменения
-кода: чтобы добавить признак, достаточно вычислить его в
-``extract_features`` и добавить вес в ``ModelConfig.weights``.
+Модель не классифицирует клиента («уйдёт/останется»), а возвращает оценку
+риска ухода — целое число от 0 до 100 (``round(probability * 100)``).
+
+Веса признаков не зашиты в код: пользователь обязан передать их сам через
+``ModelConfig(weights={...})`` — у ``weights`` нет значения по умолчанию.
+Чтобы добавить признак, достаточно вычислить его в ``extract_features`` и
+добавить его вес в передаваемый словарь.
 
 Зависимости: только стандартная библиотека (Python 3.11+).
 """
@@ -15,7 +19,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -28,66 +32,45 @@ ACTIVE_STATUSES = frozenset({"active", "prolong_wait"})
 DEFAULT_EXPIRES_SOON_DAYS = 7
 
 
+def _is_finite_number(value: Any) -> bool:
+    """Конечное число (int или float), но не bool."""
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+    )
+
+
 @dataclass
 class ModelConfig:
     """Конфигурация модели оттока.
 
     Attributes:
-        weights: Отображение «имя признака -> вес». Признак, отсутствующий
-            в словаре, просто не участвует в скоринге — так новый признак
-            добавляется одной строкой в конфиге.
-        bias: Свободный член (b) логистической функции. Отрицательное
-            значение по умолчанию означает: «клиент без тревожных сигналов
-            считается лояльным».
-        threshold: Порог классификации: probability >= threshold -> отток.
+        weights: Отображение «имя признака -> вес». Обязательный параметр:
+            веса задаёт пользователь модели, значения по умолчанию нет.
+            Признак, отсутствующий в словаре, просто не участвует в
+            скоринге — так новый признак добавляется одной строкой.
+        bias: Свободный член (b) логистической функции. По умолчанию 0:
+            клиент без сигналов получает нейтральную оценку 50; отрицательное
+            значение смещает базовую оценку в сторону «лоялен».
         expires_soon_days: Параметр N — окно в днях для признаков
             «услуга скоро истекает» и «ближайшие продления».
-
-    Обоснование весов по умолчанию (экспертная оценка, шкала логита):
-        - prolong_wait — сильнейший сигнал: клиент уже не оплатил услугу,
-          и через 5 дней она будет удалена. Самый большой вес (+3.0).
-        - prolong_wait_without_funds — усиливающий модификатор: ждёт оплаты,
-          а денег нет даже с учётом бонусов (+2.0). В сумме с предыдущим
-          даёт logit +5, что почти гарантированно классифицируется как отток.
-        - failed_payment_ratio — доля неуспешных платежей, прямая история
-          проблем с оплатой (+2.0 * ratio).
-        - balance_deficit — ближайшие продления дороже доступных средств:
-          физически не хватит денег продлить (+1.5).
-        - autoprolong_off_ratio — клиент не доверяет автопродлению, каждое
-          продление — ручное решение, где можно отказаться (+1.5 * ratio).
-        - expires_soon_no_autoprolong — точка принятия решения уже близко,
-          а автоматики нет (+1.2).
-        - suspended_ratio — услуги уже приостановлены (обычно за неуплату),
-          клиент частично «отвалился» (+1.0 * ratio).
-        - deleted_blocked_ratio — клиент уже удалял услуги раньше,
-          демонстрировал готовность расстаться с сервисами (+1.0 * ratio).
-        - full_autoprolong_coverage — защитный признак: всё продлевается
-          автоматически, клиент настроил и забыл (-1.0).
-        - sufficient_funds — защитный признак: средств хватает на все
-          ближайшие продления (-0.8).
     """
 
-    weights: dict[str, float] = field(
-        default_factory=lambda: {
-            "has_prolong_wait": 3.0,
-            "prolong_wait_without_funds": 2.0,
-            "failed_payment_ratio": 2.0,
-            "balance_deficit": 1.5,
-            "autoprolong_off_ratio": 1.5,
-            "expires_soon_no_autoprolong": 1.2,
-            "suspended_ratio": 1.0,
-            "deleted_blocked_ratio": 1.0,
-            "full_autoprolong_coverage": -1.0,
-            "sufficient_funds": -0.8,
-        }
-    )
-    bias: float = -2.5
-    threshold: float = 0.5
+    weights: dict[str, float]
+    bias: float = 0.0
     expires_soon_days: int = DEFAULT_EXPIRES_SOON_DAYS
 
     def __post_init__(self) -> None:
-        if not 0.0 <= self.threshold <= 1.0:
-            raise ValueError("threshold должен быть в диапазоне [0, 1]")
+        if not isinstance(self.weights, dict):
+            raise ValueError("weights должен быть словарём {имя признака: вес}")
+        for name, weight in self.weights.items():
+            if not isinstance(name, str):
+                raise ValueError("имена признаков в weights должны быть строками")
+            if not _is_finite_number(weight):
+                raise ValueError(f"вес признака {name!r} должен быть конечным числом")
+        if not _is_finite_number(self.bias):
+            raise ValueError("bias должен быть конечным числом")
         if self.expires_soon_days <= 0:
             raise ValueError("expires_soon_days должен быть положительным")
 
@@ -98,6 +81,11 @@ def _sigmoid(x: float) -> float:
         return 1.0 / (1.0 + math.exp(-x))
     ex = math.exp(x)
     return ex / (1.0 + ex)
+
+
+def _score_from_probability(probability: float) -> int:
+    """Переводит вероятность оттока в целую оценку риска 0..100."""
+    return max(0, min(100, round(probability * 100)))
 
 
 def _parse_datetime(value: Any) -> datetime | None:
@@ -227,37 +215,38 @@ def extract_features(
 def _is_insufficient_data(customer: dict[str, Any]) -> bool:
     """Проверяет, достаточно ли данных для скоринга.
 
-    Нет ни услуг, ни транзакций — оценивать нечего: любой вердикт
-    был бы гаданием, поэтому возвращаем False (не отток) с флагом.
+    Нет ни услуг, ни транзакций — оценивать нечего: любая оценка была бы
+    гаданием, поэтому возвращаем None с флагом insufficient_data.
     """
     return not (customer.get("services") or []) and not (customer.get("transactions") or [])
 
 
-def predict_churn_with_explanation(
+def predict_churn_score_with_explanation(
     customer: dict[str, Any],
-    config: ModelConfig | None = None,
+    config: ModelConfig,
     now: datetime | None = None,
-) -> tuple[bool, float, dict[str, Any]]:
-    """Предсказывает отток и возвращает разбор вкладов признаков.
+) -> tuple[int | None, float, dict[str, Any]]:
+    """Оценивает риск оттока и возвращает разбор вкладов признаков.
 
     Args:
         customer: JSON-снапшот клиента.
-        config: Конфигурация модели; при None используется конфиг по умолчанию.
+        config: Конфигурация модели с заданными пользователем весами.
         now: Момент «сейчас» (для тестов); по умолчанию текущее UTC-время.
 
     Returns:
-        Кортеж (решение, вероятность, объяснение), где объяснение — dict:
-        - contributions: вклад каждого признака в логит (weight * value);
-        - bias: свободный член;
-        - features: сырые значения признаков;
-        - insufficient_data: True, если данных не хватило для оценки
-          (тогда решение всегда False).
+        Кортеж (оценка, вероятность, объяснение), где:
+        - оценка — целое число 0..100 (риск ухода) либо None, если данных
+          недостаточно для оценки;
+        - вероятность — сырое значение sigmoid в диапазоне [0, 1];
+        - объяснение — dict:
+            - contributions: вклад каждого признака в логит (weight * value);
+            - bias: свободный член;
+            - features: сырые значения признаков;
+            - insufficient_data: True, если данных не хватило для оценки
+              (тогда оценка — None, вероятность — 0.0).
     """
-    if config is None:
-        config = ModelConfig()
-
     if _is_insufficient_data(customer):
-        return False, 0.0, {
+        return None, 0.0, {
             "contributions": {},
             "bias": config.bias,
             "features": {},
@@ -277,9 +266,9 @@ def predict_churn_with_explanation(
         logit += contribution
 
     probability = _sigmoid(logit)
-    decision = probability >= config.threshold
+    score = _score_from_probability(probability)
 
-    return decision, probability, {
+    return score, probability, {
         "contributions": contributions,
         "bias": config.bias,
         "features": features,
@@ -287,21 +276,21 @@ def predict_churn_with_explanation(
     }
 
 
-def predict_churn(
+def predict_churn_score(
     customer: dict[str, Any],
-    config: ModelConfig | None = None,
+    config: ModelConfig,
     now: datetime | None = None,
-) -> bool:
-    """Предсказывает, уйдёт ли клиент (не продлит услуги).
+) -> int | None:
+    """Оценивает риск оттока клиента по шкале 0..100.
 
     Args:
         customer: JSON-снапшот клиента.
-        config: Конфигурация модели; при None используется конфиг по умолчанию.
+        config: Конфигурация модели с заданными пользователем весами.
         now: Момент «сейчас» (для тестов); по умолчанию текущее UTC-время.
 
     Returns:
-        True — клиент уйдёт (probability >= threshold), False — останется
-        или данных недостаточно для оценки.
+        Целое число от 0 до 100 — оценка риска ухода (0 — точно останется,
+        100 — точно уйдёт). None — данных недостаточно для оценки.
     """
-    decision, _, _ = predict_churn_with_explanation(customer, config=config, now=now)
-    return decision
+    score, _, _ = predict_churn_score_with_explanation(customer, config, now=now)
+    return score

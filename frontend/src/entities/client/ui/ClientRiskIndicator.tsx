@@ -6,12 +6,14 @@ import './client-risk-indicator.css'
 const riskColors = { high: '#de2626', medium: '#ff7a00', low: '#ffc76b' }
 
 export function ClientRiskIndicator({ client }: { client: Client }) {
+  if (client.risk === 'no_data' || client.score === null) return <span className="client-risk-indicator">нет оценки</span>
   const label = `${riskLabels[client.risk]} риск · ${client.score}%`
 
   return (
     <Tooltip title={label}>
       <span className="client-risk-indicator" role="img" aria-label={label} tabIndex={0}>
         <Progress type="circle" percent={client.score} size={40} strokeWidth={9} strokeColor={riskColors[client.risk]} railColor="var(--dashboard-ring-track)" strokeLinecap="round" />
+        <span className="client-risk-indicator__level">{riskLabels[client.risk]}</span>
       </span>
     </Tooltip>
   )

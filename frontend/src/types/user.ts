@@ -1,5 +1,5 @@
 // Соответствует CurrentUser на бэке (backend/app/db/schemas/auth.py)
-export type UserRole = 'admin' | 'manager'
+export type UserRole = 'superadmin' | 'admin' | 'manager'
 
 export interface User {
   login: string

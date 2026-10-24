@@ -1,17 +1,39 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { ApiError } from '../api/client'
+import { ApiError, OIDC_LOGIN_URL } from '../api/client'
+import { getOidcStatus } from '../api/auth'
+import { useApiResource } from '../api/useApiResource'
 import { AuthLayout } from '../components/AuthLayout'
+
+const OIDC_ERROR_MESSAGES: Record<string, string> = {
+  oidc_failed: 'Не удалось войти через Authentik. Попробуйте ещё раз.',
+  oidc_no_account: 'Для этого аккаунта нет доступа в панели — обратитесь к администратору.',
+}
 
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const oidcError = searchParams.get('error')
+  const { data: oidcStatus } = useApiResource(getOidcStatus)
   const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(oidcError ? (OIDC_ERROR_MESSAGES[oidcError] ?? null) : null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isOidcRedirecting, setIsOidcRedirecting] = useState(false)
+
+  // Не <a href> — /auth/oidc/login не идемпотентен (пишет state/nonce в сессию
+  // на каждый вызов), а браузер может спекулятивно подгрузить href по ховеру
+  // ещё до клика (prerender/prefetch). Второй, "призрачный" вызов перезаписывает
+  // state в сессионной cookie раньше настоящего — колбэк потом видит чужой state
+  // и падает с oidc_failed. Кнопка с явной навигацией по клику и блокировкой
+  // от повторного клика этого не допускает.
+  function startOidcLogin() {
+    setIsOidcRedirecting(true)
+    window.location.href = OIDC_LOGIN_URL
+  }
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -57,6 +79,12 @@ export function LoginPage() {
           Войти
         </button>
       </form>
+      {oidcStatus?.enabled && <>
+        <div className="auth-divider"><span>или</span></div>
+        <button type="button" className="auth-submit auth-submit--secondary" onClick={startOidcLogin} disabled={isOidcRedirecting}>
+          Войти через Authentik
+        </button>
+      </>}
     </AuthLayout>
   )
 }

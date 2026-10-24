@@ -18,6 +18,7 @@ def _make_config(**overrides) -> Config:
         "jwt_refresh_secret_key": "b" * 32,
         "admin_login": "admin",
         "admin_password": "password123",
+        "session_secret_key": "c" * 32,
     }
     base.update(overrides)
     return Config(_env_file=None, **base)
@@ -47,6 +48,13 @@ def test_grouped_properties():
     assert config.jwt.algorithm == "HS256"
     assert config.jwt.access_token_expire_minutes == 15
     assert config.database.echo is False
+
+
+def test_login_guard_defaults():
+    """Пороги защиты от подбора пароля по логину имеют разумные значения по умолчанию."""
+    config = _make_config()
+    assert config.login_max_failures == 5
+    assert config.login_failure_window_seconds == 900
 
 
 def test_short_jwt_secret_rejected():
