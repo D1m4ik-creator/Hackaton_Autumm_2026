@@ -8,10 +8,11 @@
 
 Модель — ``predict_churn_score_with_explanation``; веса ей задаёт
 пользователь через настройки (у самой модели весов по умолчанию нет).
-Экспертные веса по умолчанию живут здесь, в ``_DEFAULT_WEIGHTS``, и отдаются
-через ``default_settings()``. Адаптер готовит для модели снимок каждого
-клиента, переводит её ``score`` 0..100 в уровень ``high/medium/low``, считает
-денежную оценку потерь и собирает причины.
+Веса и тексты причин по умолчанию выводятся из реестра признаков
+``app.ml.features.FEATURE_REGISTRY`` и отдаются через ``default_settings()``.
+Адаптер готовит для модели снимок каждого клиента, переводит её ``score``
+0..100 в уровень ``high/medium/low``, считает денежную оценку потерь и
+собирает причины.
 
 Исправления на границе данных и модели (баги в данных, а не в модели):
 
@@ -20,21 +21,22 @@
 * ``bonusState`` в данных — строка ``"locked"``/``"unlocked"``, а модель делает
   ``bool(...)``; адаптер передаёт ``True`` только при ``"unlocked"``.
 
-Как добавить признак (расширяемость без правки инфраструктуры):
+Как добавить признак: создать ``Feature`` в новом файле
+``app/ml/features/<имя>.py`` (код, вес по умолчанию, текст причины, функция
+``compute(ctx) -> float в [0,1]``) и добавить его в ``FEATURE_REGISTRY``
+(``app/ml/features/__init__.py``) — вес и текст причины подхватятся сюда
+автоматически, больше ничего в адаптере или модели менять не нужно.
 
-1. вычислить признак в ``app.ml.churn_model.extract_features`` (значение в [0, 1]);
-2. добавить его вес в ``weights`` — через ``default_settings()`` или через
-   сохранённые настройки (``PATCH /model/settings``).
-
-Признак, у которого есть вес, но нет реализации в ``extract_features``, даёт
-нулевой вклад (модель берёт ``features.get(name, 0.0)``), поэтому вес можно
-завести заранее. Текст причины для нового признака добавляется в
-``_REASON_TEXTS`` ниже; для неизвестного имени показывается «Признак «имя»».
+Признак, у которого есть вес, но нет записи в реестре (например, старое имя
+после удаления файла), даёт нулевой вклад (модель берёт
+``features.get(name, 0.0)``) и не падает; для него показывается общая подпись
+«Признак «имя»» (см. ``_reason_text`` ниже).
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Any
@@ -51,44 +53,20 @@ from app.ml.churn_model import (
     ModelConfig,
     predict_churn_score_with_explanation,
 )
+from app.ml.features import FEATURE_REGISTRY
+from app.ml.features.custom import make_custom_feature, validate_formula
 
-# Веса признаков по умолчанию (экспертная оценка, шкала логита). Модель сама
-# весов не задаёт — их передаёт пользователь через настройки; эти значения
-# адаптер отдаёт в ``default_settings()`` как стартовую точку.
-# Обоснование:
-#   - prolong_wait — сильнейший сигнал: клиент уже не оплатил услугу,
-#     и через 5 дней она будет удалена. Самый большой вес (+3.0).
-#   - prolong_wait_without_funds — усиливающий модификатор: ждёт оплаты,
-#     а денег нет даже с учётом бонусов (+2.0). В сумме с предыдущим
-#     даёт logit +5, что даёт оценку риска около 99.
-#   - failed_payment_ratio — доля неуспешных платежей, прямая история
-#     проблем с оплатой (+2.0 * ratio).
-#   - balance_deficit — ближайшие продления дороже доступных средств:
-#     физически не хватит денег продлить (+1.5).
-#   - autoprolong_off_ratio — клиент не доверяет автопродлению, каждое
-#     продление — ручное решение, где можно отказаться (+1.5 * ratio).
-#   - expires_soon_no_autoprolong — точка принятия решения уже близко,
-#     а автоматики нет (+1.2).
-#   - suspended_ratio — услуги уже приостановлены (обычно за неуплату),
-#     клиент частично «отвалился» (+1.0 * ratio).
-#   - deleted_blocked_ratio — клиент уже удалял услуги раньше,
-#     демонстрировал готовность расстаться с сервисами (+1.0 * ratio).
-#   - full_autoprolong_coverage — защитный признак: всё продлевается
-#     автоматически, клиент настроил и забыл (-1.0).
-#   - sufficient_funds — защитный признак: средств хватает на все
-#     ближайшие продления (-0.8).
-_DEFAULT_WEIGHTS: dict[str, float] = {
-    "has_prolong_wait": 3.0,
-    "prolong_wait_without_funds": 2.0,
-    "failed_payment_ratio": 2.0,
-    "balance_deficit": 1.5,
-    "autoprolong_off_ratio": 1.5,
-    "expires_soon_no_autoprolong": 1.2,
-    "suspended_ratio": 1.0,
-    "deleted_blocked_ratio": 1.0,
-    "full_autoprolong_coverage": -1.0,
-    "sufficient_funds": -0.8,
-}
+# Коды пользовательских метрик: как имена переменных Python, не пересекаются
+# с кодами встроенных признаков (зарезервированы).
+_CUSTOM_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,40}$")
+_BUILTIN_CODES = frozenset(feature.code for feature in FEATURE_REGISTRY)
+
+# Веса и тексты причин по умолчанию выводятся из реестра признаков
+# (app/ml/features) — у каждого Feature вес и текст объяснения уже заданы
+# рядом с его формулой, здесь их незачем дублировать вручную (раньше это
+# были два отдельных литерала, которые нужно было синхронизировать руками
+# при каждом новом признаке — источник рассинхрона).
+_DEFAULT_WEIGHTS: dict[str, float] = {feature.code: feature.default_weight for feature in FEATURE_REGISTRY}
 
 # Свободный член по умолчанию: отрицательное значение означает «клиент без
 # тревожных сигналов считается лояльным».
@@ -114,19 +92,8 @@ _PERIOD_DAYS: dict[str, float] = {
     "year": 365,
 }
 
-# Человеко-читаемые причины по именам признаков.
-_REASON_TEXTS: dict[str, str] = {
-    "has_prolong_wait": "Есть услуга в статусе «Ожидает оплаты»",
-    "prolong_wait_without_funds": "Ожидает оплаты, а денег на счёте не хватает",
-    "failed_payment_ratio": "Много неуспешных платежей",
-    "balance_deficit": "Баланса не хватает на ближайшие продления",
-    "autoprolong_off_ratio": "У активных услуг выключено автопродление",
-    "expires_soon_no_autoprolong": "Услуга скоро истекает, автопродление выключено",
-    "suspended_ratio": "Часть услуг приостановлена",
-    "deleted_blocked_ratio": "Раньше удалял или потерял услуги",
-    "full_autoprolong_coverage": "Всё продлевается автоматически",
-    "sufficient_funds": "Средств хватает на ближайшие продления",
-}
+# Человеко-читаемые причины по кодам признаков — тоже из реестра.
+_REASON_TEXTS: dict[str, str] = {feature.code: feature.reason_text for feature in FEATURE_REGISTRY}
 
 
 def _is_number(value: Any) -> bool:
@@ -166,6 +133,7 @@ def default_settings() -> dict:
         "thresholds": dict(_DEFAULT_THRESHOLDS),
         "expiresSoonDays": DEFAULT_EXPIRES_SOON_DAYS,
         "horizonDays": _DEFAULT_HORIZON_DAYS,
+        "customFeatures": {},
     }
 
 
@@ -241,22 +209,47 @@ def validate_settings(data: dict) -> dict:
             raise ValueError("horizonDays должен быть целым числом от 1 до 3650")
         result["horizonDays"] = value
 
+    if "customFeatures" in data:
+        custom_features = data["customFeatures"]
+        if not isinstance(custom_features, dict):
+            raise ValueError("customFeatures должен быть объектом {код метрики: {label, formula}}")
+        normalized_custom: dict[str, dict[str, str]] = {}
+        for code, spec in custom_features.items():
+            if not isinstance(code, str) or not _CUSTOM_CODE_PATTERN.match(code):
+                raise ValueError(
+                    f"код метрики {code!r} должен состоять из латиницы в нижнем регистре, "
+                    "цифр и подчёркиваний, начинаться с буквы, длина 3-41 символ"
+                )
+            if code in _BUILTIN_CODES:
+                raise ValueError(f"код метрики {code!r} зарезервирован встроенным признаком")
+            if not isinstance(spec, dict):
+                raise ValueError(f"метрика {code!r} должна быть объектом {{label, formula}}")
+            label = spec.get("label")
+            if not isinstance(label, str) or not label.strip():
+                raise ValueError(f"метрика {code!r}: label должен быть непустой строкой")
+            formula = spec.get("formula")
+            if not isinstance(formula, str) or not formula.strip():
+                raise ValueError(f"метрика {code!r}: formula должна быть непустой строкой")
+            validate_formula(formula)
+            normalized_custom[code] = {"label": label, "formula": formula}
+        result["customFeatures"] = normalized_custom
+
     return result
 
 
-def _reason_text(name: str) -> str:
+def _reason_text(name: str, reason_texts: dict[str, str]) -> str:
     """Текст причины по имени признака; для неизвестного — «Признак «имя»»."""
-    return _REASON_TEXTS.get(name, f"Признак «{name}»")
+    return reason_texts.get(name, f"Признак «{name}»")
 
 
-def _build_reasons(contributions: dict[str, float]) -> list[Reason]:
+def _build_reasons(contributions: dict[str, float], reason_texts: dict[str, str]) -> list[Reason]:
     """Причины: положительные вклады по убыванию, максимум 3."""
     positive = sorted(
         ((name, value) for name, value in contributions.items() if value > 0),
         key=lambda item: item[1],
         reverse=True,
     )
-    reasons = [Reason(name, _reason_text(name)) for name, _ in positive[:3]]
+    reasons = [Reason(name, _reason_text(name, reason_texts)) for name, _ in positive[:3]]
     if not reasons:
         return [Reason("no_risk_signals", "Тревожных сигналов не найдено")]
     return reasons
@@ -307,6 +300,16 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
         expires_soon_days=int(expires_soon_days),
     )
 
+    # Пользовательские метрики по формуле (admin/superadmin, см.
+    # app/ml/features/custom.py) — считаются наравне со встроенными, их
+    # тексты причин объединяем с дефолтными локально для этого вызова.
+    custom_specs = settings.get("customFeatures") or {}
+    extra_features = [
+        make_custom_feature(code, spec["label"], spec["formula"])
+        for code, spec in custom_specs.items()
+    ]
+    reason_texts = {**_REASON_TEXTS, **{code: spec["label"] for code, spec in custom_specs.items()}}
+
     # Группировка без N+1: услуги по владельцу, транзакции по владельцу услуги.
     services_by_owner: dict[int, list[ServiceData]] = defaultdict(list)
     service_owner: dict[int, int] = {}
@@ -331,6 +334,9 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
             "balance": account.balance,
             "bonusBalance": account.bonus_balance,
             "bonusState": account.bonus_state == "unlocked",
+            # Только для признака customer_value (app/ml/features/customer_value.py) —
+            # остальные признаки на сумму пополнений не смотрят.
+            "totalReplenished": account.total_replenished,
             "services": [
                 {
                     "status": service.status,
@@ -347,7 +353,7 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
         }
 
         score, probability, explanation = predict_churn_score_with_explanation(
-            customer, config, now=as_of
+            customer, config, now=as_of, extra_features=extra_features
         )
 
         live_services = sum(
@@ -395,7 +401,7 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
                 account_id=account.id,
                 score=score,
                 level=level,
-                reasons=_build_reasons(contributions),
+                reasons=_build_reasons(contributions, reason_texts),
                 expected_loss_cents=_expected_loss_cents(
                     account_services, probability, horizon_days
                 ),

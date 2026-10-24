@@ -10,8 +10,8 @@
 
 Веса признаков не зашиты в код: пользователь обязан передать их сам через
 ``ModelConfig(weights={...})`` — у ``weights`` нет значения по умолчанию.
-Чтобы добавить признак, достаточно вычислить его в ``extract_features`` и
-добавить его вес в передаваемый словарь.
+Сами признаки — реестр в ``app.ml.features`` (``FEATURE_REGISTRY``): чтобы
+добавить новый, достаточно одного нового файла там, здесь ничего не меняется.
 
 Зависимости: только стандартная библиотека (Python 3.11+).
 """
@@ -20,8 +20,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
+from typing import Any, Sequence
+
+from app.ml.features import FEATURE_REGISTRY, Feature, build_context
 
 # Статусы услуг, которые считаются «живыми» и участвуют в оценке
 # будущего оттока. deleted/blocked — уже свершившийся факт, они
@@ -88,34 +90,13 @@ def _score_from_probability(probability: float) -> int:
     return max(0, min(100, round(probability * 100)))
 
 
-def _parse_datetime(value: Any) -> datetime | None:
-    """Парсит дату из ISO-строки или datetime; возвращает None при ошибке.
-
-    Наивные даты (без таймзоны) трактуются как UTC, чтобы сравнение
-    с «сейчас» было корректным.
-    """
-    if value is None:
-        return None
-    if isinstance(value, datetime):
-        dt = value
-    elif isinstance(value, str):
-        try:
-            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    else:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
 def extract_features(
     customer: dict[str, Any],
     config: ModelConfig,
     now: datetime | None = None,
+    extra_features: Sequence[Feature] = (),
 ) -> dict[str, float]:
-    """Извлекает признаки из снапшота клиента.
+    """Извлекает признаки из снапшота клиента через реестр (app/ml/features).
 
     Все признаки приведены к диапазону [0, 1] (бинарные или доли),
     поэтому веса в конфиге напрямую сравнимы между собой и не требуют
@@ -126,90 +107,15 @@ def extract_features(
         config: Конфигурация модели (нужен параметр expires_soon_days).
         now: Момент времени «сейчас»; по умолчанию — текущее UTC-время.
             Параметр вынесен для детерминированного тестирования.
+        extra_features: Пользовательские метрики по формуле (admin/superadmin,
+            см. app/ml/features/custom.py) — считаются наравне со встроенными,
+            по умолчанию пустой список, существующие вызовы не затронуты.
 
     Returns:
-        Словарь «имя признака -> значение».
+        Словарь «код признака -> значение».
     """
-    if now is None:
-        now = datetime.now(timezone.utc)
-    elif now.tzinfo is None:
-        now = now.replace(tzinfo=timezone.utc)
-
-    services = customer.get("services") or []
-    transactions = customer.get("transactions") or []
-
-    balance = float(customer.get("balance") or 0)
-    bonus_balance = float(customer.get("bonusBalance") or 0)
-    bonus_state = bool(customer.get("bonusState"))
-    # Доступные средства: основной баланс + бонусы, если их разрешено тратить.
-    # Реферальный withdrawBalance сознательно не учитываем: перевод на
-    # основной баланс — отдельное действие клиента, на него нельзя
-    # полагаться при оценке «хватит ли денег на продление».
-    available_funds = balance + (bonus_balance if bonus_state else 0.0)
-
-    prolong_wait_services = [s for s in services if s.get("status") == "prolong_wait"]
-    active_services = [s for s in services if s.get("status") == "active"]
-    suspended_services = [s for s in services if s.get("status") == "suspended"]
-    gone_services = [s for s in services if s.get("status") in ("deleted", "blocked")]
-
-    features: dict[str, float] = {}
-
-    # --- prolong_wait: сильнейший сигнал оттока ---
-    features["has_prolong_wait"] = 1.0 if prolong_wait_services else 0.0
-
-    prolong_wait_cost = sum(float(s.get("price") or 0) for s in prolong_wait_services)
-    features["prolong_wait_without_funds"] = (
-        1.0 if prolong_wait_services and available_funds < prolong_wait_cost else 0.0
-    )
-
-    # --- активные услуги, истекающие в ближайшие N дней ---
-    horizon_seconds = config.expires_soon_days * 86400
-    expiring_soon = []
-    for s in active_services:
-        expires_at = _parse_datetime(s.get("expiresAt"))
-        if expires_at is not None and 0 <= (expires_at - now).total_seconds() <= horizon_seconds:
-            expiring_soon.append(s)
-
-    features["expires_soon_no_autoprolong"] = (
-        1.0 if any(not s.get("autoprolong") for s in expiring_soon) else 0.0
-    )
-
-    # --- баланс против ближайших продлений ---
-    # «Ближайшие продления» = prolong_wait (уже ждут оплаты) + активные
-    # услуги, истекающие в окне N дней.
-    upcoming_cost = prolong_wait_cost + sum(float(s.get("price") or 0) for s in expiring_soon)
-    features["balance_deficit"] = (
-        1.0 if upcoming_cost > 0 and available_funds < upcoming_cost else 0.0
-    )
-    features["sufficient_funds"] = (
-        1.0 if upcoming_cost > 0 and available_funds >= upcoming_cost else 0.0
-    )
-
-    # --- доли по услугам ---
-    if active_services:
-        features["autoprolong_off_ratio"] = (
-            sum(1 for s in active_services if not s.get("autoprolong")) / len(active_services)
-        )
-    else:
-        features["autoprolong_off_ratio"] = 0.0
-
-    features["full_autoprolong_coverage"] = (
-        1.0 if active_services and all(s.get("autoprolong") for s in active_services) else 0.0
-    )
-
-    total_services = len(services)
-    features["suspended_ratio"] = len(suspended_services) / total_services if total_services else 0.0
-    features["deleted_blocked_ratio"] = len(gone_services) / total_services if total_services else 0.0
-
-    # --- история платежей ---
-    total_tx = len(transactions)
-    if total_tx:
-        failed = sum(1 for t in transactions if t.get("status") == "not_performed")
-        features["failed_payment_ratio"] = failed / total_tx
-    else:
-        features["failed_payment_ratio"] = 0.0
-
-    return features
+    ctx = build_context(customer, config.expires_soon_days, now)
+    return {feature.code: feature.value(ctx) for feature in (*FEATURE_REGISTRY, *extra_features)}
 
 
 def _is_insufficient_data(customer: dict[str, Any]) -> bool:
@@ -225,6 +131,7 @@ def predict_churn_score_with_explanation(
     customer: dict[str, Any],
     config: ModelConfig,
     now: datetime | None = None,
+    extra_features: Sequence[Feature] = (),
 ) -> tuple[int | None, float, dict[str, Any]]:
     """Оценивает риск оттока и возвращает разбор вкладов признаков.
 
@@ -232,6 +139,7 @@ def predict_churn_score_with_explanation(
         customer: JSON-снапшот клиента.
         config: Конфигурация модели с заданными пользователем весами.
         now: Момент «сейчас» (для тестов); по умолчанию текущее UTC-время.
+        extra_features: Пользовательские метрики по формуле, см. extract_features.
 
     Returns:
         Кортеж (оценка, вероятность, объяснение), где:
@@ -253,7 +161,7 @@ def predict_churn_score_with_explanation(
             "insufficient_data": True,
         }
 
-    features = extract_features(customer, config, now=now)
+    features = extract_features(customer, config, now=now, extra_features=extra_features)
 
     contributions: dict[str, float] = {}
     logit = config.bias

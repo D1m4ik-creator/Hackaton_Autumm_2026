@@ -8,7 +8,8 @@
 .client-risk-table .ant-table-column-title { flex: none; }
 .client-risk-table .ant-table-cell.ant-table-cell-align-center .ant-table-column-sorters { margin-inline: auto; }
 .client-risk-table .ant-table-thead > tr > th:nth-child(3) .ant-table-column-sorters,
-.client-risk-table .ant-table-thead > tr > th:nth-child(4) .ant-table-column-sorters { margin-inline: auto; }
+.client-risk-table .ant-table-thead > tr > th:nth-child(4) .ant-table-column-sorters,
+.client-risk-table .ant-table-thead > tr > th:nth-child(5) .ant-table-column-sorters { margin-inline: auto; }
 .client-sort-icon { display: inline-block; color: var(--dashboard-muted); font-size: 14px; font-weight: 400; line-height: 14px; }
 .client-sort-icon--active { color: var(--dashboard-text); font-weight: 700; }
 .client-risk-table .ant-table-tbody::before { display: table-row; height: 14px; content: ''; }

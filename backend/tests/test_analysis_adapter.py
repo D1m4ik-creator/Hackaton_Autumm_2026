@@ -269,3 +269,69 @@ def test_details_are_json_serializable() -> None:
     result = analyze(source, default_settings(), AS_OF)
     for customer in result.customers:
         json.dumps(customer.details, allow_nan=False)
+
+
+def test_validate_settings_accepts_custom_feature() -> None:
+    """Пользовательская метрика с валидной формулой проходит нормализацию."""
+    data = {
+        **default_settings(),
+        "customFeatures": {"big_spender": {"label": "Крупный плательщик", "formula": "total_replenished > 300000"}},
+    }
+    normalized = validate_settings(data)
+    assert normalized["customFeatures"]["big_spender"] == {
+        "label": "Крупный плательщик",
+        "formula": "total_replenished > 300000",
+    }
+
+
+@pytest.mark.parametrize(
+    "custom_features",
+    [
+        {"1bad": {"label": "x", "formula": "1"}},  # код не с буквы
+        {"ab": {"label": "x", "formula": "1"}},  # слишком короткий код
+        {"has_prolong_wait": {"label": "x", "formula": "1"}},  # зарезервирован встроенным признаком
+        {"ok_code": {"label": "", "formula": "1"}},  # пустой label
+        {"ok_code": {"label": "x", "formula": ""}},  # пустая формула
+        {"ok_code": {"label": "x", "formula": "__import__('os')"}},  # опасная формула
+        {"ok_code": "not-a-dict"},  # значение не объект
+        "not-a-dict",  # вся секция не объект
+    ],
+)
+def test_validate_settings_rejects_bad_custom_feature(custom_features) -> None:
+    with pytest.raises(ValueError):
+        validate_settings({**default_settings(), "customFeatures": custom_features})
+
+
+def test_analyze_applies_custom_feature_weight_and_reason() -> None:
+    """Кастомная метрика с ненулевым весом реально влияет на score и попадает в reasons."""
+    source = _load_source()
+    base_settings = default_settings()
+    zero_weight = validate_settings({
+        **base_settings,
+        "customFeatures": {"big_spender": {"label": "Крупный плательщик", "formula": "total_replenished > 1"}},
+        "weights": {**base_settings["weights"], "big_spender": 0.0},
+    })
+    high_weight = validate_settings({
+        **base_settings,
+        "customFeatures": {"big_spender": {"label": "Крупный плательщик", "formula": "total_replenished > 1"}},
+        "weights": {**base_settings["weights"], "big_spender": 10.0},
+    })
+
+    zero_c = _by_account(analyze(source, zero_weight, AS_OF))[5]
+    high_c = _by_account(analyze(source, high_weight, AS_OF))[5]
+
+    assert zero_c.score is not None and high_c.score is not None
+    assert high_c.score > zero_c.score
+    assert "big_spender" in high_c.details["features"]
+    assert any(r.code == "big_spender" and r.text == "Крупный плательщик" for r in high_c.reasons)
+
+
+def test_analyze_without_custom_features_is_unaffected() -> None:
+    """Без customFeatures поведение analyze не меняется (обратная совместимость)."""
+    source = _load_source()
+    with_key = {**default_settings(), "customFeatures": {}}
+    without_key = default_settings()
+    with_c = _by_account(analyze(source, with_key, AS_OF))
+    without_c = _by_account(analyze(source, without_key, AS_OF))
+    for account_id in with_c:
+        assert with_c[account_id].score == without_c[account_id].score
