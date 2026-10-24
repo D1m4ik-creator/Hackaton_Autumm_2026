@@ -1,10 +1,9 @@
 services:
   db:
     image: postgres:17
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-hackathon}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    # Логин, пароль и имя базы берутся из того же файла, что и у api, чтобы они не расходились
+    env_file:
+      - ./backend/.env
     ports:
       # 5433 на хосте, чтобы не конфликтовать с локально установленным PostgreSQL
       - "${POSTGRES_PORT:-5433}:5432"
