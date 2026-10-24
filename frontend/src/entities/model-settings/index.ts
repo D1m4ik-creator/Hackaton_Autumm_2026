@@ -1,3 +1,4 @@
 export { defaultModelSettings } from './model/defaults'
-export type { ModelSettings, ModelFeature } from './model/types'
-export { getWeightSum, readModelSettings, validateModelSettings, toSettingsPatch } from './lib/settings'
+export { MODEL_FEATURES } from './model/features'
+export type { CustomFeatureSpec, ModelFeatureMeta, ModelSettings } from './model/types'
+export { readModelSettings, validateModelSettings, toSettingsPatch } from './lib/settings'
