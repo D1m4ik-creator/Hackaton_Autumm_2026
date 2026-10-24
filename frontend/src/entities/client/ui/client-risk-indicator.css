@@ -1,0 +1,9 @@
+.client-risk-indicator {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  vertical-align: middle;
+}
+
+.client-risk-indicator .ant-progress { transform: rotate(90deg); }
+.client-risk-indicator:focus-visible { outline: 2px solid #db6600; outline-offset: 4px; border-radius: 50%; }

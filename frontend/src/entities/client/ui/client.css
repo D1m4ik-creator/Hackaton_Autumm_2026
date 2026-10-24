@@ -1,0 +1,7 @@
+.client-cell { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.client-cell strong { overflow: hidden; color: var(--dashboard-text); font-size: 14px; font-weight: 600; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.client-cell > span { overflow: hidden; color: var(--dashboard-muted); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.risk-badge.ant-tag { display: inline-flex; align-items: center; justify-content: center; width: 80px; height: 24px; margin: 1px 0 0; padding: 0; border: 0; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 12px; }
+.risk-badge--high.ant-tag { color: var(--dashboard-accent); background: var(--dashboard-badge-high-bg); }
+.risk-badge--medium.ant-tag { color: var(--dashboard-badge-medium-text); background: var(--dashboard-badge-medium-bg); }
+.risk-badge--low.ant-tag { color: var(--dashboard-muted); background: var(--dashboard-badge-low-bg); }

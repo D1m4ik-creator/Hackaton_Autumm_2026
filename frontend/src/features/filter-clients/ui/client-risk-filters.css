@@ -1,0 +1,11 @@
+.client-risk-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.client-risk-filter.ant-btn { min-width: 92px; height: 36px; padding: 0 18px; border: 1px solid #d0cdc9; border-radius: 999px; background: white; color: #55534f; font-size: 13px; font-weight: 400; box-shadow: none; }
+.client-risk-filter.ant-btn:first-child { min-width: 72px; margin-right: 2px; }
+.client-risk-filter.ant-btn:hover { color: #121110 !important; border-color: #121110 !important; background: #fafafa !important; }
+.client-risk-filter--active.ant-btn, .client-risk-filter--active.ant-btn:hover { color: #fafafa !important; background: #121110 !important; border-color: #121110 !important; font-weight: 600; }
+
+@media (max-width: 439px) {
+  .client-risk-filters { gap: 8px; }
+  .client-risk-filter.ant-btn { flex: 1; min-width: 0; padding-inline: 12px; }
+  .client-risk-filter.ant-btn:first-child { min-width: 56px; margin-right: 0; }
+}

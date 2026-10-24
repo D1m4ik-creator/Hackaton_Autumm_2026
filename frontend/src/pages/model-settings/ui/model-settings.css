@@ -1,0 +1,14 @@
+.model-settings-page .dashboard-main { padding-right: 48px; }
+.model-settings-heading { margin-bottom: 30px; }
+.model-settings-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
+.model-settings-heading p { margin-top: 5px; color: #7a7875; font-size: 13px; line-height: 16px; }
+
+@media (max-width: 1279px) { .model-settings-page .dashboard-main { padding-right: 32px; } }
+@media (max-width: 959px) { .model-settings-page .dashboard-main { padding-right: 24px; } }
+@media (max-width: 767px) {
+  .model-settings-page .dashboard-main { padding-right: 20px; }
+  .model-settings-heading { margin-bottom: 24px; }
+  .model-settings-heading h1 { font-size: 23px; }
+  .model-settings-heading p { line-height: 20px; }
+}
+@media (max-width: 439px) { .model-settings-page .dashboard-main { padding-right: 12px; } }
