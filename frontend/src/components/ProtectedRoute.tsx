@@ -2,10 +2,12 @@ import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+// isLoading здесь не проверяется — AuthGate (app/App.tsx) держит сплэш-экран,
+// пока AuthProvider не определит сессию, так что к моменту рендера этого
+// компонента user уже известен.
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user } = useAuth()
 
-  if (isLoading) return null
   if (!user) return <Navigate to="/login" replace />
 
   return <>{children}</>

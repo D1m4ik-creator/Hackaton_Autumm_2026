@@ -55,6 +55,7 @@ docker compose up -d --build
 | `GET /api/v1/analytics/summary` | сводка: клиенты по уровням, ожидаемые потери, версия |
 | `GET /api/v1/model/settings` | эффективные настройки модели + дефолты |
 | `PATCH /api/v1/model/settings` | частично поменять настройки (deep-merge) и пересчитать; только администратор |
+| `DELETE /api/v1/model/settings/{section}/{key}` | удалить пункт настроек, например признак модели `weights/имя`, и пересчитать; 404 если пункта нет; только администратор |
 | `PUT /api/v1/source/snapshot` | загрузить свой снимок и пересчитать; только администратор |
 | `GET /api/v1/events` | живое обновление (SSE) |
 | `GET`/`POST /api/v1/users`, `PATCH`/`DELETE /api/v1/users/{userId}` | менеджеры: список, создание (логин, почта, пароль), изменение, удаление; только администратор |

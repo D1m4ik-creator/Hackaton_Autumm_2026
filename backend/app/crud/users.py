@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import HTTPException, status
@@ -37,7 +38,7 @@ async def create_user(db: AsyncSession, data: UserCreate) -> User:
     await _check_unique(db, data.login, data.email)
     try:
         return await UsersDAO.add(
-            db, login=data.login, email=data.email, password_hash=get_password_hash(data.password), role="manager"
+            db, login=data.login, email=data.email, password_hash=await asyncio.to_thread(get_password_hash, data.password), role="manager"
         )
     except IntegrityError:
         await db.rollback()
@@ -59,7 +60,7 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate) ->
     await _check_unique(db, values.get("login"), values.get("email"), user.id)
     old_login = user.login
     if "password" in values:
-        values["password_hash"] = get_password_hash(values.pop("password"))
+        values["password_hash"] = await asyncio.to_thread(get_password_hash, values.pop("password"))
     try:
         await UsersDAO.update_by_id(db, user.id, **values)
     except IntegrityError:

@@ -20,15 +20,21 @@ export const useClientFiltersStore = create<ClientFiltersState>()((set) => ({
   setSort: (sortField, sortOrder) => set({ sortField, sortOrder }),
 }))
 
-export function selectVisibleClients(clients: Client[], filters: Pick<ClientFiltersState, 'risk' | 'sortField' | 'sortOrder'>): Client[] {
-  const filtered = clients.filter((client) => filters.risk === 'all' || client.risk === filters.risk)
-  const { sortField, sortOrder } = filters
-  if (!sortField || !sortOrder) return filtered
+export function filterClientsByRisk(clients: Client[], risk: RiskLevel | 'all'): Client[] {
+  return clients.filter((client) => risk === 'all' || client.risk === risk)
+}
 
-  return filtered.sort((a, b) => {
+export function sortClients(clients: Client[], sortField: ClientSortField | null, sortOrder: ClientSortOrder): Client[] {
+  if (!sortField || !sortOrder) return clients
+
+  return [...clients].sort((a, b) => {
     const comparison = sortField === 'name'
       ? `${a.name} ${a.email}`.localeCompare(`${b.name} ${b.email}`, 'ru')
       : a[sortField] - b[sortField]
     return sortOrder === 'ascend' ? comparison : -comparison
   })
+}
+
+export function selectVisibleClients(clients: Client[], filters: Pick<ClientFiltersState, 'risk' | 'sortField' | 'sortOrder'>): Client[] {
+  return sortClients(filterClientsByRisk(clients, filters.risk), filters.sortField, filters.sortOrder)
 }

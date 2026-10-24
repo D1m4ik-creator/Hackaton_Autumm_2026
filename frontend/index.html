@@ -5,9 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="RETAIN — обзор рисков оттока клиентов" />
     <title>RETAIN — Обзор рисков оттока</title>
+    <style>
+      #app-splash { position: fixed; inset: 0; z-index: 9999; background: #ffffff; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Статический сплэш — просто белый фон, виден сразу, ещё до загрузки и
+      выполнения React (мелькает доли секунды, пока не подключился JS).
+      Текста/лого здесь нет специально: React.SplashScreen (shared/ui/
+      splash-screen, SVG-плитки AezaLogo) подхватывает показ, пока
+      AuthProvider проверяет сессию; этот статический узел main.tsx убирает
+      сразу после первого рендера.
+    -->
+    <div id="app-splash" aria-hidden="true"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -1,7 +1,7 @@
 import { Result } from 'antd'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { getMockClientDetail } from '../../../entities/client'
-import { ThemeToggle } from '../../../features/switch-theme'
+import { clientsPath as resolveClientsPath } from '../../../shared/lib/app-paths'
 import { ClientActivityTimeline } from '../../../widgets/client-activity'
 import { ClientProfile } from '../../../widgets/client-profile'
 import { ClientRiskReasons } from '../../../widgets/client-risk-reasons'
@@ -11,14 +11,14 @@ import './client-detail.css'
 
 export function ClientDetailPage({ onSignOut }: { onSignOut?: () => Promise<void> }) {
   const { clientId = '' } = useParams<{ clientId: string }>()
+  const { pathname } = useLocation()
   const detail = getMockClientDetail(clientId)
-  const clientsPath = onSignOut ? '/app/clients' : '/clients'
+  const clientsPath = resolveClientsPath(pathname)
 
   return (
     <DashboardShell className="client-detail-page" onSignOut={onSignOut}>
       <header className="client-detail-toolbar">
         <Link to={clientsPath} className="client-detail-back">← Все клиенты под риском</Link>
-        <ThemeToggle />
       </header>
       {detail ? <div className="client-detail-grid">
         <ClientProfile detail={detail} />

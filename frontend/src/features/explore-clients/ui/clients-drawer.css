@@ -1,9 +1,0 @@
-.demo-note { margin-bottom: 24px; }
-.back-to-clients { margin-bottom: 20px; }
-.clients-filters { display: flex; gap: 12px; margin-bottom: 20px; }
-.clients-filters .ant-select { flex: 0 0 160px; }
-
-@media (max-width: 767px) {
-  .clients-filters { flex-wrap: wrap; }
-  .clients-filters .ant-select { flex: 1; }
-}

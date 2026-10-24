@@ -5,6 +5,7 @@
 """
 
 import asyncio
+import json
 import logging
 from collections.abc import Sequence
 from datetime import datetime, timezone
@@ -55,6 +56,27 @@ async def acquire_lock(session: AsyncSession) -> None:
     )
 
 
+# Ключ в сохранённых настройках: список удалённых пунктов вида «секция.ключ».
+# Нужен, потому что эффективные настройки = дефолты + сохранённое, и без него дефолтный пункт возвращался бы после удаления
+REMOVED_KEY = "_removed"
+
+
+def split_stored(stored: dict) -> tuple[dict, list[str]]:
+    """Делит сохранённые настройки на сами настройки и список удалённых пунктов"""
+    data = dict(stored)
+    removed = [p for p in data.pop(REMOVED_KEY, []) if isinstance(p, str)]
+    return data, removed
+
+
+def apply_removals(settings: dict, removed: list[str]) -> dict:
+    """Убирает из настроек удалённые пункты «секция.ключ» (если секции или ключа уже нет, ничего не делает)"""
+    for path in removed:
+        section, _, key = path.partition(".")
+        if isinstance(settings.get(section), dict):
+            settings[section] = {k: v for k, v in settings[section].items() if k != key}
+    return settings
+
+
 def deep_merge(base: dict, override: dict) -> dict:
     """Рекурсивно сливает словари; не-словарные значения заменяются целиком (§6.2)"""
     result = dict(base)
@@ -72,8 +94,8 @@ async def effective_settings(session: AsyncSession) -> dict:
     Если сохранённое после обновления модели не проходит validate_settings —
     предупреждение в лог и возврат к дефолтам (строка в БД не трогается).
     """
-    stored = await ModelSettingsDAO.get(session)
-    merged = deep_merge(analysis.default_settings(), stored)
+    data, removed = split_stored(await ModelSettingsDAO.get(session))
+    merged = apply_removals(deep_merge(analysis.default_settings(), data), removed)
     try:
         return analysis.validate_settings(merged)
     except ValueError as exc:
@@ -177,6 +199,16 @@ def check_result(result: AnalysisResult, account_ids: set[int]) -> list[Customer
                 raise AnalysisContractError(
                     f"account_id={account_id}: level='no_data' требует score=None"
                 )
+        if not isinstance(customer.reasons, list) or not all(
+            isinstance(r, Reason) and isinstance(r.code, str) and isinstance(r.text, str) for r in customer.reasons
+        ):
+            raise AnalysisContractError(f"account_id={account_id}: reasons должен быть списком Reason(code, text)")
+        if not isinstance(customer.details, dict):
+            raise AnalysisContractError(f"account_id={account_id}: details должен быть dict")
+        try:
+            json.dumps(customer.details, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise AnalysisContractError(f"account_id={account_id}: details не сериализуется в JSON: {exc}") from exc
         if not _is_int(customer.expected_loss_cents) or customer.expected_loss_cents < 0:
             raise AnalysisContractError(
                 f"account_id={account_id}: expected_loss_cents должен быть int >= 0"
@@ -207,7 +239,15 @@ async def recalculate(session: AsyncSession, reason: str) -> RiskSummary:
     transactions = await TransactionDAO.load_rows(session)
     source = _build_source(accounts, services, transactions)
 
-    result = await asyncio.to_thread(analysis.analyze, source, settings, as_of)
+    try:
+        result = await asyncio.to_thread(analysis.analyze, source, settings, as_of)
+    except AnalysisContractError:
+        raise
+    except Exception as exc:
+        logger.exception("Модель анализа завершилась с ошибкой")
+        raise AnalysisContractError(f"модель завершилась с ошибкой: {exc}") from exc
+    if not isinstance(result.customers, list) or not isinstance(result.loss_explanation, str):
+        raise AnalysisContractError("результат модели должен содержать customers (list) и loss_explanation (str)")
     account_ids = {account.id for account in source.accounts}
     customers = check_result(result, account_ids)
 
@@ -283,6 +323,13 @@ async def startup(session: AsyncSession) -> None:
             snapshot = None
         if snapshot is not None:
             await replace_source_data(session, snapshot)
+            # Посев фиксируется сразу: сбой пересчёта (например, в модели) не должен его откатывать
+            await session.commit()
+            await acquire_lock(session)
 
-    await recalculate(session, "startup")
-    await session.commit()
+    try:
+        await recalculate(session, "startup")
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        logger.exception("Пересчёт при старте не удался, данные загружены без оценок")
