@@ -1,0 +1,111 @@
+.dashboard-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+.dashboard-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
+.dashboard-heading p { margin-top: 5px; color: var(--dashboard-subtle); font-size: 13px; line-height: 16px; }
+.dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2.15625fr); row-gap: 20px; }
+.bento-section { min-width: 0; }
+.bento-card.ant-card { height: 100%; background: var(--dashboard-surface); color: var(--dashboard-text); border: 1px solid var(--dashboard-border); border-radius: 24px; box-shadow: var(--dashboard-shadow); overflow: hidden; }
+.bento-card .ant-card-body { height: 100%; padding: 24px; }
+
+.account-summary { height: 380px; }
+.account-summary .ant-card-body { padding-top: 27px; }
+.stat-label { color: var(--dashboard-muted); font-size: 11px; line-height: 14px; font-weight: 600; }
+.total-value { margin-top: 10px !important; font-size: 38px; font-weight: 700; line-height: 46px; letter-spacing: -0.8px; }
+.summary-divider { height: 1px; margin: 82px 0 22px; background: var(--dashboard-border); }
+.revenue-value { margin-top: 8px !important; color: var(--dashboard-accent); font-size: 26px; font-weight: 700; line-height: 32px; white-space: nowrap; }
+
+.risk-summary--high { height: 380px; }
+.risk-summary--high .ant-card { border-color: var(--dashboard-accent-border); }
+.risk-summary .ant-card-body { padding: 0; }
+.risk-summary__button { display: flex; align-items: center; width: 100%; height: 100%; padding: 0; border: 0; background: transparent; text-align: left; color: inherit; cursor: pointer; }
+.risk-summary__button:hover { background: var(--dashboard-hover); }
+.risk-summary--high .risk-summary__button { flex-direction: column; padding: 64px 20px 24px; }
+.risk-dial { position: relative; flex-shrink: 0; }
+.risk-dial__progress { display: block; transform: rotate(90deg); }
+.risk-dial__value { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 600; line-height: 32px; }
+.risk-dial__head { position: absolute; width: 11px; height: 11px; background: var(--dashboard-ring-head); border: 2px solid var(--dashboard-ring-head-border); border-radius: 50%; transform: translate(-50%, -50%); }
+.risk-summary__text h2 { font-size: 10px; font-weight: 700; line-height: 13px; white-space: nowrap; }
+.risk-summary--high .risk-summary__text { margin-top: 36px; text-align: center; }
+.risk-summary--high .risk-summary__text h2 { color: var(--dashboard-accent); font-size: 12px; line-height: 15px; }
+.risk-summary__sub { color: var(--dashboard-muted); font-size: 11px; line-height: 14px; }
+.risk-summary--high .risk-summary__sub { margin-top: 7px; font-size: 12px; line-height: 15px; }
+.risk-summary--medium, .risk-summary--low { height: 200px; }
+.risk-summary--medium .risk-summary__button, .risk-summary--low .risk-summary__button { align-items: flex-start; gap: 18px; padding: 39px 20px 24px 23px; }
+.risk-summary--medium .risk-summary__text, .risk-summary--low .risk-summary__text { padding-top: 2px; }
+.risk-summary--medium h2 { color: var(--dashboard-medium-label); }
+.risk-summary--low h2 { color: var(--dashboard-muted); }
+.risk-summary__count { margin: 5px 0 6px !important; font-size: 24px; font-weight: 700; line-height: 29px; }
+
+.priority-clients { height: 380px; }
+.priority-clients__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.priority-clients__header h2 { font-size: 16px; font-weight: 700; line-height: 20px; letter-spacing: -0.25px; }
+.see-all.ant-btn { flex-shrink: 0; height: 25px; margin-right: -8px; padding: 0 8px; color: var(--dashboard-text); font-size: 13px; font-weight: 600; }
+.priority-clients__list { display: flex; flex-direction: column; gap: 0; margin: 18px 0 0; padding: 0; list-style: none; }
+.priority-client { display: grid; grid-template-columns: minmax(0, 1fr) 80px minmax(74px, 0.48fr); align-items: start; column-gap: 16px; width: 100%; height: 76px; padding: 11px 0 0; border: 0; border-radius: 8px; background: transparent; text-align: left; color: inherit; cursor: pointer; }
+.priority-client:hover { background: var(--dashboard-row-hover); }
+.priority-client__revenue { padding-top: 6px; font-size: 13px; font-weight: 600; line-height: 16px; text-align: right; white-space: nowrap; }
+
+.risk-trend { height: 200px; }
+.risk-trend__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.risk-trend__header h2 { margin: 0; font-size: 14px; font-weight: 700; line-height: 18px; letter-spacing: -0.2px; }
+.risk-trend__header .ant-select { flex: 0 0 64px; height: 24px; text-align: right; color: var(--dashboard-muted); font-size: 12px; }
+.risk-trend__bars { display: flex; align-items: flex-end; gap: 8px; height: 108px; margin-top: 19px; }
+.risk-trend__bar { flex: 1 1 0; min-width: 0; border-radius: 4px; background: var(--dashboard-bar); transition: background 160ms; }
+.risk-trend__bar:hover, .risk-trend__bar:focus-visible { background: var(--dashboard-bar-hover); }
+.risk-trend__bar--peak, .risk-trend__bar--peak:hover { background: var(--dashboard-accent-bright); }
+
+
+@media (min-width: 1600px) { .dashboard-grid { column-gap: 16px; } }
+@media (max-width: 1279px) {
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  .account-summary { grid-column: 1; grid-row: 1; }
+  .risk-summary--high { grid-column: 2; grid-row: 1; }
+  .priority-clients { grid-column: 1 / -1; grid-row: 3; }
+  .risk-summary--medium { grid-column: 1; grid-row: 2; }
+  .risk-summary--low { grid-column: 2; grid-row: 2; }
+  .risk-trend { grid-column: 1 / -1; grid-row: 4; }
+}
+
+@media (max-width: 959px) {
+  .dashboard-heading p { max-width: 470px; }
+  .risk-summary--medium .risk-summary__button, .risk-summary--low .risk-summary__button { flex-direction: column; gap: 14px; align-items: center; justify-content: center; padding: 20px 12px; text-align: center; }
+  .risk-summary--medium, .risk-summary--low { height: 240px; }
+}
+
+@media (max-width: 767px) {
+  .dashboard-heading { flex-direction: column; gap: 16px; margin-bottom: 24px; }
+  .dashboard-heading h1 { font-size: 23px; }
+  .dashboard-heading p { line-height: 20px; }
+  .dashboard-grid { gap: 16px; }
+  .account-summary, .risk-summary--high { height: 340px; }
+  .risk-summary--high .risk-summary__button { justify-content: center; padding: 24px 8px; }
+  .risk-summary--high .risk-summary__text { margin-top: 26px; }
+  .summary-divider { margin-top: 62px; }
+  .risk-summary--medium, .risk-summary--low { height: 225px; }
+}
+
+@media (max-width: 439px) {
+  .dashboard-grid { gap: 12px; }
+  .bento-card .ant-card-body { padding: 20px 16px; }
+  .account-summary, .risk-summary--high { height: 300px; }
+  .risk-summary--high .ant-card-body { padding: 0; }
+  .risk-summary--high .risk-dial { transform: scale(0.78); margin: -18px; }
+  .risk-summary--high .risk-summary__text { margin-top: 30px; }
+  .risk-summary--medium .ant-card-body, .risk-summary--low .ant-card-body { padding: 0; }
+  .total-value { font-size: 34px; }
+  .revenue-value { font-size: 23px; }
+  .summary-divider { margin-top: 46px; }
+  .priority-clients { height: 388px; }
+  .priority-clients__header { align-items: flex-start; }
+  .priority-clients__header h2 { max-width: 220px; font-size: 15px; }
+  .priority-clients__list { margin-top: 12px; }
+  .priority-client { grid-template-columns: minmax(0, 1fr) 65px 60px; gap: 6px; }
+  .priority-client .risk-badge { width: 65px; font-size: 9px; }
+  .priority-client__revenue { font-size: 12px; }
+  .client-cell strong { font-size: 13px; }
+  .client-cell > span { font-size: 11px; }
+  .risk-trend__header h2 { max-width: 235px; font-size: 12px; }
+  .risk-trend__bars { gap: 5px; }
+}
+
+
+.risk-trend__bar:focus-visible { outline: 2px solid var(--dashboard-accent); outline-offset: 4px; }

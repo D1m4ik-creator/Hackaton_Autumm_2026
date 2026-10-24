@@ -1,0 +1,57 @@
+@import '@fontsource-variable/inter/wght.css';
+
+:root {
+  color-scheme: light;
+  --dashboard-bg: #f2f1ef;
+  --dashboard-surface: #ffffff;
+  --dashboard-text: #121110;
+  --dashboard-muted: #7a7875;
+  --dashboard-subtle: #7a7875;
+  --dashboard-border: #e4e2df;
+  --dashboard-shadow: 0 10px 24px rgb(18 17 16 / 7%);
+  --dashboard-accent: #db6600;
+  --dashboard-accent-bright: #ff7a00;
+  --dashboard-accent-border: #ffcc9e;
+  --dashboard-hover: #fdfcfb;
+  --dashboard-row-hover: #faf9f7;
+  --dashboard-ring-track: #ebebeb;
+  --dashboard-ring-medium: #66666b;
+  --dashboard-ring-low: #b8b8bf;
+  --dashboard-ring-head: #ff7a00;
+  --dashboard-ring-head-border: #ffffff;
+  --dashboard-medium-label: #55534f;
+  --dashboard-bar: #ebebeb;
+  --dashboard-bar-hover: #d0cdc9;
+  --dashboard-badge-high-bg: #fff0e2;
+  --dashboard-badge-medium-bg: #e4e2df;
+  --dashboard-badge-medium-text: #55534f;
+  --dashboard-badge-low-bg: #f2f1ef;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --dashboard-bg: #0a090d;
+  --dashboard-surface: #111111;
+  --dashboard-text: #fafafa;
+  --dashboard-muted: #8c8c94;
+  --dashboard-border: #242424;
+  --dashboard-shadow: 0 16px 36px rgb(0 0 0 / 50%);
+  --dashboard-accent: #ff7a00;
+  --dashboard-accent-border: #4d2b0d;
+  --dashboard-hover: #171717;
+  --dashboard-row-hover: #1b1b1b;
+  --dashboard-ring-track: #292929;
+  --dashboard-ring-medium: #b8b8bd;
+  --dashboard-ring-low: #66666b;
+  --dashboard-ring-head: #ffd9a8;
+  --dashboard-ring-head-border: #ffd9a8;
+  --dashboard-medium-label: #b8b8bd;
+  --dashboard-bar: #323232;
+  --dashboard-bar-hover: #484848;
+  --dashboard-badge-high-bg: #352111;
+  --dashboard-badge-medium-bg: #292929;
+  --dashboard-badge-medium-text: #d9d9de;
+  --dashboard-badge-low-bg: #202020;
+}
+
+body { margin: 0; }

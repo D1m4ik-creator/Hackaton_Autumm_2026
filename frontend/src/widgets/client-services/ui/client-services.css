@@ -1,0 +1,10 @@
+.client-services { min-height: 480px; }
+.client-services__list { margin: 21px 0 0; padding: 0; list-style: none; }
+.client-services__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 26px; }
+.client-services__header h3 { margin: 0; font-size: 14px; font-weight: 700; line-height: 17px; }
+.client-services__status.ant-tag { display: inline-flex; flex: 0 0 80px; align-items: center; justify-content: center; width: 80px; height: 26px; margin: 0; padding: 0; border: 0; border-radius: 0; font-size: 9px; font-weight: 700; line-height: 11px; }
+.client-services__status--prolong_wait.ant-tag { background: var(--detail-wait-bg); color: var(--detail-wait-text); }
+.client-services__status--active.ant-tag { background: var(--detail-active-bg); color: var(--detail-active-text); }
+.client-services__list .client-services__price { margin-top: 6px; color: var(--detail-muted); font-size: 12px; line-height: 15px; }
+.client-services__list .client-services__auto-prolong { margin-top: 7px; color: var(--detail-secondary); font-size: 12px; line-height: 15px; }
+.client-services__list li + li { margin-top: 27px; padding-top: 19px; border-top: 1px solid var(--dashboard-border); }

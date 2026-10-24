@@ -28,13 +28,7 @@ export function LoginPage() {
   }
 
   return (
-    <AuthLayout
-      title="С возвращением"
-      subtitle="Войдите, чтобы продолжить"
-      switchHint="Нет аккаунта?"
-      switchLinkLabel="Зарегистрироваться"
-      switchLinkTo="/register"
-    >
+    <AuthLayout title="С возвращением" subtitle="Войдите, чтобы продолжить">
       <form onSubmit={handleSubmit}>
         <div className="auth-field">
           <label htmlFor="email">Email</label>

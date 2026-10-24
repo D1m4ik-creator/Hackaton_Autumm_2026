@@ -246,19 +246,6 @@ body {
   cursor: not-allowed;
 }
 
-.auth-switch {
-  margin: 1.5rem 0 0;
-  text-align: center;
-  font-size: 0.9rem;
-  color: var(--gray-500);
-}
-
-.auth-switch a {
-  color: var(--gray-900);
-  font-weight: 600;
-  text-decoration: underline;
-}
-
 @media (max-width: 860px) {
   .auth-layout {
     grid-template-columns: 1fr;
