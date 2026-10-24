@@ -1,16 +1,16 @@
-.theme-toggle.ant-btn {
-  flex-shrink: 0;
-  height: 36px;
-  padding-inline: 14px;
-  background: var(--dashboard-surface);
-  border-color: var(--dashboard-border);
-  color: var(--dashboard-text);
-  font-size: 13px;
-  box-shadow: none;
+.theme-toggle.ant-switch {
+  background: rgba(255, 255, 255, 0.15);
 }
 
-.theme-toggle.ant-btn:hover {
-  background: var(--dashboard-hover) !important;
-  color: var(--dashboard-accent) !important;
-  border-color: var(--dashboard-accent) !important;
+.theme-toggle.ant-switch:hover:not(.ant-switch-disabled) {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.theme-toggle.ant-switch.ant-switch-checked {
+  background: var(--dashboard-accent-bright, #ff7a00);
+}
+
+.theme-toggle.ant-switch.ant-switch-checked:hover:not(.ant-switch-disabled) {
+  background: var(--dashboard-accent-bright, #ff7a00);
+  opacity: 0.85;
 }

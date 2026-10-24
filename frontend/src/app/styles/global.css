@@ -30,16 +30,16 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --dashboard-bg: #0a090d;
-  --dashboard-surface: #111111;
+  --dashboard-bg: #191816;
+  --dashboard-surface: #211f1c;
   --dashboard-text: #fafafa;
-  --dashboard-muted: #8c8c94;
-  --dashboard-border: #242424;
+  --dashboard-muted: #a8a5a1;
+  --dashboard-border: #2b2a29;
   --dashboard-shadow: 0 16px 36px rgb(0 0 0 / 50%);
   --dashboard-accent: #ff7a00;
   --dashboard-accent-border: #4d2b0d;
-  --dashboard-hover: #171717;
-  --dashboard-row-hover: #1b1b1b;
+  --dashboard-hover: #272624;
+  --dashboard-row-hover: #2b2a28;
   --dashboard-ring-track: #292929;
   --dashboard-ring-medium: #b8b8bd;
   --dashboard-ring-low: #66666b;

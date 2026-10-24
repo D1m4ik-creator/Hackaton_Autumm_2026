@@ -90,7 +90,7 @@ body {
   align-items: center;
   gap: 0.5rem;
   width: fit-content;
-  font-size: 0.95rem;
+  font-size: 1.2rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--gray-100);
@@ -202,6 +202,19 @@ body {
 
 .auth-field input:focus {
   border-color: var(--gray-700);
+}
+
+/* Браузер красит автозаполненные поля своим непрозрачным фоном (обычно
+   серо-голубым) поверх любого background — это не победить без трюка с
+   inset box-shadow того же цвета, что и обычный фон поля. */
+.auth-field input:-webkit-autofill,
+.auth-field input:-webkit-autofill:hover,
+.auth-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--gray-800);
+  -webkit-box-shadow: 0 0 0 1000px var(--gray-50) inset;
+  box-shadow: 0 0 0 1000px var(--gray-50) inset;
+  caret-color: var(--gray-800);
+  transition: background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;
 }
 
 .auth-field__hint {

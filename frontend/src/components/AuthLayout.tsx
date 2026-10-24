@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { AezaLogo } from '../shared/ui/aeza-logo/AezaLogo'
 import { GradientBlinds } from './GradientBlinds'
 import '../styles/auth.css'
 
@@ -8,13 +9,20 @@ interface AuthLayoutProps {
   children: ReactNode
 }
 
+// Стабильная ссылка вне компонента: GradientBlinds держит этот массив в
+// зависимостях своего useEffect. Инлайн-литерал пересоздавался бы на
+// каждый ре-рендер AuthLayout (а он ре-рендерится на каждое нажатие клавиши
+// в форме логина) — эффект думал бы, что проп изменился, и пересоздавал
+// WebGL-рендерер с нуля, отсюда дёрганый рестарт анимации при вводе.
+const GRADIENT_COLORS = ['#120f0c', '#ff7a00', '#ffd9a8']
+
 export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
   return (
     <div className="auth-layout">
       <aside className="auth-visual">
         <div className="auth-visual__bg">
           <GradientBlinds
-            gradientColors={['#120f0c', '#ff7a00', '#ffd9a8']}
+            gradientColors={GRADIENT_COLORS}
             angle={15}
             noise={0.15}
             blindCount={20}
@@ -28,14 +36,13 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
           />
         </div>
         <div className="auth-visual__brand">
-          <span className="auth-visual__brand-mark">A</span>
-          <span>Проект</span>
+          <AezaLogo className="auth-visual__brand-logo" />
         </div>
         <div className="auth-visual__footer">
           <p className="auth-visual__quote">
-            «Это приложение меня заебало»
+            «У Aéza действительно быстрый хостинг»
           </p>
-          <p className="auth-visual__wordmark">ебанный в рот.</p>
+          <p className="auth-visual__wordmark">FOOL-STACK</p>
         </div>
       </aside>
 

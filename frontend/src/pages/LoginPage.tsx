@@ -8,7 +8,7 @@ import { AuthLayout } from '../components/AuthLayout'
 export function LoginPage() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -18,7 +18,7 @@ export function LoginPage() {
     setError(null)
     setIsSubmitting(true)
     try {
-      await login(email, password)
+      await login(loginValue, password)
       navigate('/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не удалось войти')
@@ -31,13 +31,13 @@ export function LoginPage() {
     <AuthLayout title="С возвращением" subtitle="Войдите, чтобы продолжить">
       <form onSubmit={handleSubmit}>
         <div className="auth-field">
-          <label htmlFor="email">Email</label>
+          <label htmlFor="login">Логин</label>
           <input
-            id="email"
-            type="email"
-            placeholder="Email *"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            id="login"
+            type="text"
+            placeholder="Логин *"
+            value={loginValue}
+            onChange={(e) => setLoginValue(e.target.value)}
             required
           />
         </div>

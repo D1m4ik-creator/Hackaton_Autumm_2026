@@ -1,0 +1,13 @@
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+}
+
+.app-splash__logo {
+  font-size: 64px;
+}

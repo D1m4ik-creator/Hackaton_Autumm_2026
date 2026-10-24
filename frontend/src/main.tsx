@@ -13,3 +13,7 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+// React.SplashScreen (тот же вид) уже на подходе — убираем статическую
+// заглушку из index.html, чтобы не дублировать её с React-версией.
+document.getElementById('app-splash')?.remove()
