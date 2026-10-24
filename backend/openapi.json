@@ -409,6 +409,61 @@
         }
       }
     },
+    "/api/v1/model/settings/{section}/{key}": {
+      "delete": {
+        "tags": [
+          "model"
+        ],
+        "summary": "Delete Setting",
+        "description": "Удалить пункт настроек (например, признак модели: weights/имя) и пересчитать (только администратор)",
+        "operationId": "delete_setting_api_v1_model_settings__section___key__delete",
+        "parameters": [
+          {
+            "name": "section",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Section"
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettingsPatchOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Секция или пункт настроек не найдены"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/source/snapshot": {
       "put": {
         "tags": [

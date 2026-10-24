@@ -125,3 +125,45 @@ def test_config_rejects_example_secrets_only_in_secure_mode():
         _config(admin_password="admin12345", cookie_secure=True)
     with pytest.raises(ValidationError):
         _config(jwt_secret_key="change_me_" + "x" * 30, cookie_secure=True)
+
+
+async def test_delete_model_setting(loaded: AsyncClient, monkeypatch):
+    import app.analysis as analysis
+
+    original = analysis.default_settings
+    monkeypatch.setattr(analysis, "default_settings", lambda: {**original(), "weights": {"x": 1.0, "y": 2.0}})
+
+    before = (await loaded.get("/api/v1/model/settings")).json()
+    assert before["settings"]["weights"] == {"x": 1.0, "y": 2.0}
+    version = (await loaded.get("/api/v1/analytics/summary")).json()["version"]
+
+    deleted = await loaded.delete("/api/v1/model/settings/weights/x")
+    assert deleted.status_code == 200
+    assert deleted.json()["settings"]["weights"] == {"y": 2.0}
+    assert deleted.json()["version"] == version + 1
+    # Дефолтный пункт не возвращается ни при чтении, ни после других изменений
+    assert (await loaded.get("/api/v1/model/settings")).json()["settings"]["weights"] == {"y": 2.0}
+    patched = await loaded.patch("/api/v1/model/settings", json={"asOf": "2026-10-19T15:00:00Z"})
+    assert patched.json()["settings"]["weights"] == {"y": 2.0}
+    # defaults показывают, что было по умолчанию
+    assert patched.json()["defaults"]["weights"] == {"x": 1.0, "y": 2.0}
+
+    assert (await loaded.delete("/api/v1/model/settings/weights/x")).status_code == 404
+    assert (await loaded.delete("/api/v1/model/settings/nothing/x")).status_code == 404
+    assert (await loaded.delete("/api/v1/model/settings/asOf/x")).status_code == 422
+
+    # Снова заданный пункт возвращается и не считается удалённым
+    added = await loaded.patch("/api/v1/model/settings", json={"weights": {"x": 5.0}})
+    assert added.json()["settings"]["weights"] == {"x": 5.0, "y": 2.0}
+    assert (await loaded.get("/api/v1/model/settings")).json()["settings"]["weights"] == {"x": 5.0, "y": 2.0}
+
+
+async def test_delete_model_setting_requires_admin(client: AsyncClient):
+    assert (await client.delete("/api/v1/model/settings/weights/x")).status_code == 401
+    assert (await client.post("/api/v1/auth/login", json=ADMIN)).status_code == 200
+    created = await client.post("/api/v1/users", json={"login": "mgr1", "email": "mgr1@example.com", "password": "Passw0rd-1"})
+    assert created.status_code == 201
+    from httpx import ASGITransport, AsyncClient as Client
+    async with Client(transport=ASGITransport(app=app), base_url="http://testserver") as m:
+        assert (await m.post("/api/v1/auth/login", json={"login": "mgr1", "password": "Passw0rd-1"})).status_code == 200
+        assert (await m.delete("/api/v1/model/settings/weights/x")).status_code == 403
