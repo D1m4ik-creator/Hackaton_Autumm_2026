@@ -1,6 +1,7 @@
 import uuid
+from collections.abc import Sequence
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import Row, delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -44,3 +45,32 @@ class BaseDAO:
         """Удаляет запись по id"""
         await session.execute(delete(cls.model).where(cls.model.id == id))
         await session.commit()
+
+    # Методы для снимка исходных данных и пересчёта: без commit, коммит делает crud
+
+    @classmethod
+    async def load_rows(cls, session: AsyncSession) -> Sequence[Row]:
+        """Все строки таблицы, отсортированные по id (для загрузки снимка в память)"""
+        table = cls.model.__table__
+        result = await session.execute(select(table).order_by(table.c.id))
+        return result.all()
+
+    @classmethod
+    async def bulk_insert(cls, session: AsyncSession, rows: list[dict], chunk: int = 5000) -> None:
+        """Пакетная вставка словарей без commit"""
+        if not rows:
+            return
+        table = cls.model.__table__
+        for start in range(0, len(rows), chunk):
+            await session.execute(insert(table), rows[start : start + chunk])
+
+    @classmethod
+    async def delete_all(cls, session: AsyncSession) -> None:
+        """Удаляет все строки таблицы без commit"""
+        await session.execute(delete(cls.model))
+
+    @classmethod
+    async def count(cls, session: AsyncSession) -> int:
+        """Число строк в таблице"""
+        result = await session.execute(select(func.count()).select_from(cls.model))
+        return result.scalar_one()
