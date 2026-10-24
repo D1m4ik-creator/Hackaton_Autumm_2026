@@ -34,7 +34,7 @@ async def manager(admin: AsyncClient):
 
 
 async def test_admin_me_has_role(admin: AsyncClient):
-    assert (await admin.get("/api/v1/auth/me")).json()["role"] == "admin"
+    assert (await admin.get("/api/v1/auth/me")).json()["role"] == "superadmin"
 
 
 async def test_create_manager_and_login_by_login_or_email(admin: AsyncClient):
