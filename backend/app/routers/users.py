@@ -21,13 +21,13 @@ async def list_users(db: SessionDep, actor: Actor):
     return await crud_users.list_users(db, actor)
 
 
-@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, responses=error_responses(409))
+@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED, responses=error_responses(409, 502))
 async def create_user(db: SessionDep, data: UserCreate, actor: Actor):
     """Создать менеджера (логин, почта, пароль); поле role=admin создаёт админа, это может только суперадмин"""
     return await crud_users.create_user(db, data, actor)
 
 
-@router.patch("/{userId}", response_model=UserOut, responses=error_responses(404, 409))
+@router.patch("/{userId}", response_model=UserOut, responses=error_responses(404, 409, 502))
 async def update_user(db: SessionDep, data: UserUpdate, user_id: Annotated[uuid.UUID, Path(alias="userId")], actor: Actor):
     """Изменить логин, почту или пароль; админов меняет только суперадмин"""
     return await crud_users.update_user(db, user_id, data, actor)

@@ -1,10 +1,12 @@
 import asyncio
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import app.core.authentik_api as authentik_api
 from app.core.config import get_settings
 from app.core.security import get_password_hash
 from app.dao.session import SessionsDAO
@@ -31,6 +33,18 @@ async def _check_unique(db: AsyncSession, login: str | None, email: str | None, 
             raise _conflict("Почта уже занята")
 
 
+@asynccontextmanager
+async def _authentik_errors():
+    """Сбой Authentik -> 502: изменение в панели не сохраняется, чтобы логин/пароль не разошлись"""
+    try:
+        yield
+    except authentik_api.AuthentikSyncError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Не удалось синхронизировать пользователя с Authentik, попробуйте позже",
+        ) from exc
+
+
 def _forbidden() -> HTTPException:
     return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
 
@@ -50,12 +64,16 @@ async def create_user(db: AsyncSession, data: UserCreate, actor: CurrentUser) ->
     if data.role == "admin" and actor.role != "superadmin":
         raise _forbidden()
     await _check_unique(db, data.login, data.email)
+    password_hash = await asyncio.to_thread(get_password_hash, data.password)
+    # Сначала Authentik: если он недоступен, пользователь не появится и в панели
+    async with _authentik_errors():
+        created_pk = await authentik_api.upsert_user(login=data.login, email=data.email, password=data.password)
     try:
-        return await UsersDAO.add(
-            db, login=data.login, email=data.email, password_hash=await asyncio.to_thread(get_password_hash, data.password), role=data.role
-        )
+        return await UsersDAO.add(db, login=data.login, email=data.email, password_hash=password_hash, role=data.role)
     except IntegrityError:
         await db.rollback()
+        if created_pk is not None:
+            await authentik_api.delete_user_by_pk(created_pk)
         raise _conflict("Логин или почта уже заняты")
 
 
@@ -73,8 +91,9 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
     if not values:
         return user
     await _check_unique(db, values.get("login"), values.get("email"), user.id)
-    if "password" in values:
-        values["password_hash"] = await asyncio.to_thread(get_password_hash, values.pop("password"))
+    password = values.pop("password", None)
+    if password is not None:
+        values["password_hash"] = await asyncio.to_thread(get_password_hash, password)
     try:
         # Логин перечитывается под блокировкой строки после хэширования: параллельное переименование
         # либо уже закоммичено (увидим новый логин), либо ждёт нас — сессии закроются у актуального логина
@@ -85,6 +104,11 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
         if "login" in values or "password_hash" in values:
             # Смена логина или пароля закрывает старые сессии менеджера в той же транзакции
             await SessionsDAO.delete_by_login_no_commit(db, old_login)
+        # Authentik — под блокировкой строки и до commit: при его сбое изменение в панели откатится
+        async with _authentik_errors():
+            await authentik_api.upsert_user(
+                login=values.get("login", old_login), email=values.get("email", user.email), password=password, old_login=old_login
+            )
         await db.commit()
     except IntegrityError:
         await db.rollback()
@@ -107,3 +131,4 @@ async def delete_user(db: AsyncSession, user_id: uuid.UUID, actor: CurrentUser) 
     except IntegrityError:
         await db.rollback()
         raise _conflict("Не удалось удалить пользователя")
+    await authentik_api.delete_user(user.login)
