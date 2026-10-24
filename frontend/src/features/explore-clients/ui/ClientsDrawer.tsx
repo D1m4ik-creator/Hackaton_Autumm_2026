@@ -1,9 +1,12 @@
 import { ArrowLeftOutlined, SearchOutlined } from '@ant-design/icons'
 import { Alert, Button, Descriptions, Drawer, Empty, Input, Select, Table } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { useMemo } from 'react'
 import { mockClients, RiskBadge, riskLabels } from '../../../entities/client'
 import type { Client, RiskLevel } from '../../../entities/client'
 import { formatEuro } from '../../../shared/lib/format'
+import { useInfiniteList } from '../../../shared/lib/infinite-list/useInfiniteList'
+import { InfiniteScrollSentinel } from '../../../shared/ui/infinite-scroll-sentinel/InfiniteScrollSentinel'
 import { useExploreClientsStore } from '../model/store'
 import './clients-drawer.css'
 
@@ -18,10 +21,14 @@ const columns: TableColumnsType<Client> = [
 export function ClientsDrawer() {
   const { isOpen, query, riskFilter, selectedClientId, closeClients, setQuery, setRiskFilter, selectClient } = useExploreClientsStore()
   const selected = mockClients.find((client) => client.id === selectedClientId)
-  const clients = mockClients.filter((client) =>
-    (riskFilter === 'all' || client.risk === riskFilter)
-    && `${client.name} ${client.email}`.toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')),
+  const filteredClients = useMemo(
+    () => mockClients.filter((client) =>
+      (riskFilter === 'all' || client.risk === riskFilter)
+      && `${client.name} ${client.email}`.toLocaleLowerCase('ru').includes(query.trim().toLocaleLowerCase('ru')),
+    ),
+    [riskFilter, query],
   )
+  const { visibleItems: clients, hasMore, loadMore } = useInfiniteList(filteredClients)
 
   return (
     <Drawer title={selected ? selected.name : 'Клиенты под риском'} open={isOpen} onClose={closeClients} size={800}>
@@ -49,6 +56,7 @@ export function ClientsDrawer() {
             ]} />
           </div>
           <Table<Client> rowKey="id" columns={columns} dataSource={clients} pagination={false} scroll={{ x: 650 }} locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Клиенты не найдены" /> }} />
+          <InfiniteScrollSentinel hasMore={hasMore} onIntersect={loadMore} />
         </>
       )}
     </Drawer>

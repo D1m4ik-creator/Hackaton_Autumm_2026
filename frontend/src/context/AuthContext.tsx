@@ -1,30 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as authApi from '../api/auth'
-import { ApiError } from '../api/client'
 import type { User } from '../types/user'
 
 interface AuthContextValue {
   user: User | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (login: string, password: string) => Promise<void>
   logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
+// 401 здесь уже означает, что интерцептор в api/client.ts попробовал
+// обновить сессию через /auth/refresh и всё равно не смог — сессии нет.
 async function fetchCurrentUser(): Promise<User | null> {
   try {
     return await authApi.getCurrentUser()
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
-      try {
-        await authApi.refresh()
-        return await authApi.getCurrentUser()
-      } catch {
-        return null
-      }
-    }
+  } catch {
     return null
   }
 }
@@ -39,8 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    await authApi.login({ email, password })
+  const login = useCallback(async (login: string, password: string) => {
+    await authApi.login({ login, password })
     setUser(await authApi.getCurrentUser())
   }, [])
 

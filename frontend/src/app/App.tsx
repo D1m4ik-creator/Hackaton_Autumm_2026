@@ -1,14 +1,49 @@
-import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import type { ReactNode } from 'react'
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 import { AuthProvider, useAuth } from '../context/AuthContext'
+import { SplashScreen } from '../shared/ui/splash-screen/SplashScreen'
 import { DashboardPage } from '../pages/dashboard'
 import { ClientDetailPage } from '../pages/client-detail'
 import { TopClientsPage } from '../pages/top-clients'
 import { ModelSettingsPage } from '../pages/model-settings'
 import { LoginPage } from '../pages/LoginPage'
 
+// Держит сплэш-экран (лого Aeza), пока AuthProvider не закончит
+// первую проверку сессии — покрывает и первую загрузку, и F5.
+function AuthGate({ children }: { children: ReactNode }) {
+  const { isLoading } = useAuth()
+  if (isLoading) return <SplashScreen />
+  return <>{children}</>
+}
+
 function SessionLayout() {
-  return <AuthProvider><Outlet /></AuthProvider>
+  const location = useLocation()
+  const shouldReduceMotion = useReducedMotion()
+
+  return (
+    <AuthProvider>
+      <AuthGate>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={location.pathname}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={shouldReduceMotion ? undefined : { opacity: 0, y: -8 }}
+            transition={{ duration: shouldReduceMotion ? 0 : 0.22, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <Outlet />
+          </motion.div>
+        </AnimatePresence>
+      </AuthGate>
+    </AuthProvider>
+  )
+}
+
+function RedirectToClientDetail() {
+  const { clientId } = useParams()
+  return <Navigate to={`/app/clients/${clientId}`} replace />
 }
 
 function AuthenticatedDashboard() {
@@ -34,10 +69,10 @@ function AuthenticatedModelSettings() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="/clients" element={<TopClientsPage />} />
-      <Route path="/clients/:clientId" element={<ClientDetailPage />} />
-      <Route path="/model-settings" element={<ModelSettingsPage />} />
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      <Route path="/clients" element={<Navigate to="/app/clients" replace />} />
+      <Route path="/clients/:clientId" element={<RedirectToClientDetail />} />
+      <Route path="/model-settings" element={<Navigate to="/app/model-settings" replace />} />
       <Route element={<SessionLayout />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<ProtectedRoute><AuthenticatedDashboard /></ProtectedRoute>} />

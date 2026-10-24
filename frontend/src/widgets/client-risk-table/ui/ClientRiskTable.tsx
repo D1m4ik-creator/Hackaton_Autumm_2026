@@ -1,11 +1,14 @@
 import { Empty, Table } from 'antd'
 import type { TableColumnsType, TableProps } from 'antd'
+import { useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { ClientRiskIndicator, mockClients } from '../../../entities/client'
 import type { Client } from '../../../entities/client'
 import { selectVisibleClients, useClientFiltersStore } from '../../../features/filter-clients'
 import type { ClientSortField } from '../../../features/filter-clients'
 import { formatEuro, formatEuroCents } from '../../../shared/lib/format'
+import { useInfiniteList } from '../../../shared/lib/infinite-list/useInfiniteList'
+import { InfiniteScrollSentinel } from '../../../shared/ui/infinite-scroll-sentinel/InfiniteScrollSentinel'
 import './client-risk-table.css'
 
 export function ClientRiskTable() {
@@ -13,7 +16,11 @@ export function ClientRiskTable() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const clientsPath = pathname.startsWith('/app/') ? '/app/clients' : '/clients'
-  const visibleClients = selectVisibleClients(mockClients, filters)
+  const filteredClients = useMemo(
+    () => selectVisibleClients(mockClients, filters),
+    [filters],
+  )
+  const { visibleItems: visibleClients, hasMore, loadMore } = useInfiniteList(filteredClients)
 
   function openClient(client: Client) {
     navigate(`${clientsPath}/${client.accountId}`)
@@ -54,7 +61,8 @@ export function ClientRiskTable() {
         scroll={{ x: 900 }}
         locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Нет клиентов с выбранным уровнем риска" /> }}
       />
-      <span className="visually-hidden" role="status" aria-live="polite">Показано клиентов: {visibleClients.length}</span>
+      <InfiniteScrollSentinel hasMore={hasMore} onIntersect={loadMore} />
+      <span className="visually-hidden" role="status" aria-live="polite">Показано клиентов: {visibleClients.length} из {filteredClients.length}</span>
     </section>
   )
 }

@@ -28,8 +28,8 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
           />
         </div>
         <div className="auth-visual__brand">
-          <span className="auth-visual__brand-mark">A</span>
-          <span>Проект</span>
+          
+          <span></span>
         </div>
         <div className="auth-visual__footer">
           <p className="auth-visual__quote">

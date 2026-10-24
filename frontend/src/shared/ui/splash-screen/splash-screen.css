@@ -1,0 +1,53 @@
+.app-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: #ffffff;
+}
+
+.app-splash__mark {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #121110;
+  color: #ffffff;
+  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.app-splash__ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 20px;
+  border: 2px solid #e4e2df;
+  border-top-color: #ff7a00;
+  animation: app-splash-spin 0.9s linear infinite;
+}
+
+.app-splash__brand {
+  margin: 0;
+  font-family: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7a7875;
+}
+
+@keyframes app-splash-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-splash__ring { animation: none; }
+}

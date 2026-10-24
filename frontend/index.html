@@ -5,9 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="RETAIN — обзор рисков оттока клиентов" />
     <title>RETAIN — Обзор рисков оттока</title>
+    <style>
+      #app-splash { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: #ffffff; }
+      #app-splash .mark { position: relative; display: flex; align-items: center; justify-content: center; width: 56px; height: 56px; border-radius: 14px; background: #121110; color: #fff; font: 700 22px/1 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+      #app-splash .ring { position: absolute; inset: -8px; border-radius: 20px; border: 2px solid #e4e2df; border-top-color: #ff7a00; animation: app-splash-spin 0.9s linear infinite; }
+      #app-splash .brand { margin: 0; font: 600 14px/1 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #7a7875; }
+      @keyframes app-splash-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #app-splash .ring { animation: none; } }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!--
+      Статический сплэш — видим сразу, ещё до загрузки и выполнения React.
+      React.SplashScreen (shared/ui/splash-screen) визуально идентичен и
+      подхватывает показ, пока AuthProvider проверяет сессию; этот узел
+      main.tsx убирает сразу после первого рендера.
+    -->
+    <div id="app-splash" aria-hidden="true">
+      <div class="mark"><span>A</span><span class="ring"></span></div>
+      <p class="brand">Aeza</p>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
