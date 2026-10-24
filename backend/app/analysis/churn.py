@@ -6,9 +6,11 @@
 * ``validate_settings(data)`` — нормализация с понятными ошибками на русском;
 * ``analyze(source, settings, as_of)`` — оценка риска по всем клиентам.
 
-Модель — ``predict_churn_with_explanation`` с экспертными весами
-(``ModelConfig``). Адаптер готовит для неё снимок каждого клиента, переводит
-вероятность оттока в ``score`` 0..100 и уровень ``high/medium/low``, считает
+Модель — ``predict_churn_score_with_explanation``; веса ей задаёт
+пользователь через настройки (у самой модели весов по умолчанию нет).
+Экспертные веса по умолчанию живут здесь, в ``_DEFAULT_WEIGHTS``, и отдаются
+через ``default_settings()``. Адаптер готовит для модели снимок каждого
+клиента, переводит её ``score`` 0..100 в уровень ``high/medium/low``, считает
 денежную оценку потерь и собирает причины.
 
 Исправления на границе данных и модели (баги в данных, а не в модели):
@@ -44,7 +46,53 @@ from app.analysis.types import (
     ServiceData,
     SourceData,
 )
-from app.ml.churn_model import ModelConfig, predict_churn_with_explanation
+from app.ml.churn_model import (
+    DEFAULT_EXPIRES_SOON_DAYS,
+    ModelConfig,
+    predict_churn_score_with_explanation,
+)
+
+# Веса признаков по умолчанию (экспертная оценка, шкала логита). Модель сама
+# весов не задаёт — их передаёт пользователь через настройки; эти значения
+# адаптер отдаёт в ``default_settings()`` как стартовую точку.
+# Обоснование:
+#   - prolong_wait — сильнейший сигнал: клиент уже не оплатил услугу,
+#     и через 5 дней она будет удалена. Самый большой вес (+3.0).
+#   - prolong_wait_without_funds — усиливающий модификатор: ждёт оплаты,
+#     а денег нет даже с учётом бонусов (+2.0). В сумме с предыдущим
+#     даёт logit +5, что даёт оценку риска около 99.
+#   - failed_payment_ratio — доля неуспешных платежей, прямая история
+#     проблем с оплатой (+2.0 * ratio).
+#   - balance_deficit — ближайшие продления дороже доступных средств:
+#     физически не хватит денег продлить (+1.5).
+#   - autoprolong_off_ratio — клиент не доверяет автопродлению, каждое
+#     продление — ручное решение, где можно отказаться (+1.5 * ratio).
+#   - expires_soon_no_autoprolong — точка принятия решения уже близко,
+#     а автоматики нет (+1.2).
+#   - suspended_ratio — услуги уже приостановлены (обычно за неуплату),
+#     клиент частично «отвалился» (+1.0 * ratio).
+#   - deleted_blocked_ratio — клиент уже удалял услуги раньше,
+#     демонстрировал готовность расстаться с сервисами (+1.0 * ratio).
+#   - full_autoprolong_coverage — защитный признак: всё продлевается
+#     автоматически, клиент настроил и забыл (-1.0).
+#   - sufficient_funds — защитный признак: средств хватает на все
+#     ближайшие продления (-0.8).
+_DEFAULT_WEIGHTS: dict[str, float] = {
+    "has_prolong_wait": 3.0,
+    "prolong_wait_without_funds": 2.0,
+    "failed_payment_ratio": 2.0,
+    "balance_deficit": 1.5,
+    "autoprolong_off_ratio": 1.5,
+    "expires_soon_no_autoprolong": 1.2,
+    "suspended_ratio": 1.0,
+    "deleted_blocked_ratio": 1.0,
+    "full_autoprolong_coverage": -1.0,
+    "sufficient_funds": -0.8,
+}
+
+# Свободный член по умолчанию: отрицательное значение означает «клиент без
+# тревожных сигналов считается лояльным».
+_DEFAULT_BIAS = -2.5
 
 # Уровни порогов по score 0..100 по умолчанию.
 _DEFAULT_THRESHOLDS = {"high": 70, "medium": 35}
@@ -107,17 +155,16 @@ def _iso(dt: datetime | None) -> str | None:
 def default_settings() -> dict:
     """Настройки по умолчанию (JSON-сериализуемые).
 
-    ``weights`` и ``bias`` берутся из ``ModelConfig`` — единого источника правды
-    по коэффициентам модели.
+    ``weights`` и ``bias`` берутся из ``_DEFAULT_WEIGHTS``/``_DEFAULT_BIAS`` —
+    единого источника правды по коэффициентам модели на уровне приложения
+    (сама модель весов по умолчанию не имеет, их задаёт пользователь).
     """
-    cfg = ModelConfig()
     return {
         "asOf": None,
-        "weights": dict(cfg.weights),
-        "bias": cfg.bias,
-        "threshold": cfg.threshold,
+        "weights": dict(_DEFAULT_WEIGHTS),
+        "bias": _DEFAULT_BIAS,
         "thresholds": dict(_DEFAULT_THRESHOLDS),
-        "expiresSoonDays": cfg.expires_soon_days,
+        "expiresSoonDays": DEFAULT_EXPIRES_SOON_DAYS,
         "horizonDays": _DEFAULT_HORIZON_DAYS,
     }
 
@@ -162,12 +209,6 @@ def validate_settings(data: dict) -> dict:
         if not _is_number(data["bias"]):
             raise ValueError("bias должен быть конечным числом")
         result["bias"] = float(data["bias"])
-
-    if "threshold" in data:
-        threshold = data["threshold"]
-        if not _is_number(threshold) or not (0.0 <= float(threshold) <= 1.0):
-            raise ValueError("threshold должен быть числом от 0 до 1")
-        result["threshold"] = float(threshold)
 
     if "thresholds" in data:
         thresholds = data["thresholds"]
@@ -247,13 +288,11 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
     """Оценивает риск оттока по каждому клиенту снимка.
 
     ``settings`` уже прошёл ``validate_settings`` (гарантия инфраструктуры);
-    отсутствующие ключи подставляются из ``ModelConfig``/дефолтов.
+    отсутствующие ключи подставляются из дефолтов адаптера.
     """
-    defaults = ModelConfig()
-    weights = settings.get("weights") or dict(defaults.weights)
-    bias = settings.get("bias", defaults.bias)
-    threshold = settings.get("threshold", defaults.threshold)
-    expires_soon_days = settings.get("expiresSoonDays", defaults.expires_soon_days)
+    weights = settings.get("weights") or dict(_DEFAULT_WEIGHTS)
+    bias = settings.get("bias", _DEFAULT_BIAS)
+    expires_soon_days = settings.get("expiresSoonDays", DEFAULT_EXPIRES_SOON_DAYS)
     horizon_days = int(settings.get("horizonDays", _DEFAULT_HORIZON_DAYS))
     thresholds = settings.get("thresholds") or _DEFAULT_THRESHOLDS
     high_threshold = float(thresholds.get("high", _DEFAULT_THRESHOLDS["high"]))
@@ -262,7 +301,6 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
     config = ModelConfig(
         weights=dict(weights),
         bias=float(bias),
-        threshold=float(threshold),
         expires_soon_days=int(expires_soon_days),
     )
 
@@ -305,7 +343,7 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
             ],
         }
 
-        _, probability, explanation = predict_churn_with_explanation(
+        score, probability, explanation = predict_churn_score_with_explanation(
             customer, config, now=as_of
         )
 
@@ -333,7 +371,8 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
             )
             continue
 
-        score = max(0, min(100, round(probability * 100)))
+        # Оценку 0..100 уже посчитала модель; здесь только уровень по порогам.
+        assert score is not None  # ветка insufficient_data обработана выше
         if score >= high_threshold:
             level = "high"
         elif score >= medium_threshold:

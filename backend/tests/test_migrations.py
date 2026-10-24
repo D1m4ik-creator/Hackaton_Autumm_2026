@@ -13,6 +13,7 @@
 
 import asyncio
 import os
+from pathlib import Path
 
 import asyncpg
 import sqlalchemy as sa
@@ -27,6 +28,11 @@ from app.core.config import get_settings
 from app.db.models import Base
 
 MIG_DB = "hackathon_mig_test"
+
+# Путь к alembic.ini — абсолютный, от расположения backend/: тест должен
+# работать при запуске pytest из любой рабочей директории (script_location
+# в alembic.ini задан через %(here)s, поэтому раскроется корректно).
+ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 
 # Таблицы, которые должны появиться после наката всех миграций.
 EXPECTED_TABLES = {
@@ -110,7 +116,7 @@ def test_migrations_apply_rollback_and_match_models():
     get_settings.cache_clear()
     try:
         url = get_settings().database.get_db_url()
-        config = AlembicConfig("alembic.ini")
+        config = AlembicConfig(str(ALEMBIC_INI))
 
         # Накат с нуля
         asyncio.run(_recreate_database(params))
