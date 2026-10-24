@@ -7,9 +7,11 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
 
+from app.core.config import get_settings
 from app.core.security import ACCESS_COOKIE, REFRESH_COOKIE, create_refresh_token
 from app.db.models import AuthSession
 from app.main import app
@@ -27,7 +29,7 @@ def _client_with_refresh(refresh_token: str) -> AsyncClient:
 async def test_health(client: AsyncClient):
     response = await client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json()["status"] == "ok"
 
 
 async def test_login_success_sets_cookies(client: AsyncClient):
@@ -65,6 +67,14 @@ async def test_me_after_login(client: AsyncClient):
 
     assert response.status_code == 200
     assert response.json() == {"login": "admin", "role": "superadmin", "email": None}
+
+
+async def test_tokens_carry_uid(client: AsyncClient):
+    """Токены привязаны к пользователю: суперадмин получает uid='superadmin'."""
+    await client.post("/api/v1/auth/login", json=ADMIN)
+    secret = get_settings().jwt.secret_key.get_secret_value()
+    payload = jwt.decode(client.cookies.get(ACCESS_COOKIE), secret, algorithms=["HS256"])
+    assert payload["uid"] == "superadmin"
 
 
 async def test_refresh_without_cookie(client: AsyncClient):

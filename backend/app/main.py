@@ -5,6 +5,8 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 import app.crud.recalc as crud_recalc
 from app.core.config import get_settings
@@ -14,6 +16,72 @@ from app.crud.recalc import AnalysisContractError
 from app.routers import analytics, auth, customers, events, health, metrics, model_settings, source, users
 
 logger = logging.getLogger(__name__)
+
+# Предел размера тела запроса: больше -> 413, тело дальше не читаем (25 МиБ)
+MAX_BODY_BYTES = 25 * 1024 * 1024
+
+
+class BodySizeLimitMiddleware:
+    """Ограничивает размер тела запроса (чистый ASGI).
+
+    Есть Content-Length больше предела — сразу 413, тело не читаем. Без
+    Content-Length (chunked) считаем прочитанные байты и при превышении отвечаем
+    413, не передавая запрос приложению. Приложение само не может ответить 413
+    из чтения тела: FastAPI превращает ошибку чтения в 400, поэтому решаем здесь.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        limit = MAX_BODY_BYTES
+        content_length = Headers(scope=scope).get("content-length")
+        if content_length is not None:
+            try:
+                declared = int(content_length)
+            except ValueError:
+                declared = None
+            if declared is not None and declared > limit:
+                await self._reject(scope, receive, send)
+                return
+            # Content-Length в пределах: доверяем ему, тело не буферизуем
+            await self.app(scope, receive, send)
+            return
+
+        # Chunked: Content-Length нет — буферизуем и считаем, обрываем при превышении
+        buffered: list[Message] = []
+        total = 0
+        more_body = True
+        while more_body:
+            message = await receive()
+            if message["type"] != "http.request":
+                buffered.append(message)
+                break
+            total += len(message.get("body", b""))
+            if total > limit:
+                await self._reject(scope, receive, send)
+                return
+            buffered.append(message)
+            more_body = message.get("more_body", False)
+
+        iterator = iter(buffered)
+
+        async def replay() -> Message:
+            try:
+                return next(iterator)
+            except StopIteration:
+                return await receive()
+
+        await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _reject(scope: Scope, receive: Receive, send: Send) -> None:
+        response = JSONResponse(status_code=413, content={"detail": "Слишком большой запрос"})
+        await response(scope, receive, send)
 
 
 @asynccontextmanager
@@ -46,6 +114,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Внешний слой: ограничение размера тела должно сработать раньше разбора запроса
+app.add_middleware(BodySizeLimitMiddleware)
 
 
 app.state.limiter = limiter

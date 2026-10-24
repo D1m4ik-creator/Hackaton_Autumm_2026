@@ -65,6 +65,27 @@ docker compose up -d --build
 только агрегаты, без email/id/балансов). Числа берутся из той же строки сводки,
 что и `/analytics/summary`, поэтому совпадают. До первого пересчёта — нули.
 
+## Модель риска
+
+Риск считает логистическая модель с экспертными весами (`app/ml/churn_model.py`)
+через адаптер контракта `app/analysis/churn.py`: признаки клиента → вероятность
+оттока → `score` 0..100 и уровень `high/medium/low` (или `no_data`, если данных
+нет), плюс денежная оценка потерь. Веса, пороги уровней, горизонт и момент оценки
+`asOf` меняются через `PATCH /api/v1/model/settings` без правки кода. Признаки,
+формула score и порогов, формула потерь и таблица настроек — в
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Лимиты и устойчивость
+
+- Тело запроса больше 25 МиБ — `413`, не дочитывая (например, слишком большой снимок).
+- Вход под защитой лимитов: по IP (`RATE_LIMIT_LOGIN`/`RATE_LIMIT_REFRESH`) и по
+  конкретному логину (`LOGIN_MAX_FAILURES` неудач за `LOGIN_FAILURE_WINDOW_SECONDS`)
+  — при срабатывании `429` с `Retry-After`. Отключается `RATE_LIMIT_ENABLED=false`.
+- Пока идёт пересчёт, повторный `PATCH /model/settings` или `PUT /source/snapshot`
+  ждёт блокировку не дольше `lock_timeout`; не дождавшись — `503` с `Retry-After`.
+- Чтения (`/customers`, `/analytics/summary`) идут в одном снимке транзакции
+  (`REPEATABLE READ`), поэтому список и сводка на странице согласованы между собой.
+
 ## Загрузка своего снимка
 
 `PUT /api/v1/source/snapshot`, тело — как `origin_data/data.json`

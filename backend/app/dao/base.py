@@ -5,6 +5,10 @@ from sqlalchemy import Row, delete, func, insert, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+# Предел числа bind-параметров в одном запросе asyncpg/PostgreSQL (uint16)
+MAX_BIND_PARAMS = 32767
+
+
 class BaseDAO:
     model = None
 
@@ -56,11 +60,19 @@ class BaseDAO:
         return result.all()
 
     @classmethod
-    async def bulk_insert(cls, session: AsyncSession, rows: list[dict], chunk: int = 5000) -> None:
-        """Пакетная вставка словарей без commit"""
+    async def bulk_insert(cls, session: AsyncSession, rows: list[dict], chunk: int | None = None) -> None:
+        """Пакетная вставка словарей без commit.
+
+        Размер чанка по умолчанию подбирается по числу колонок, чтобы в одном
+        запросе не превысить предел bind-параметров asyncpg (столбцов * строк
+        <= 32767), иначе на больших снимках вставка падала бы.
+        """
         if not rows:
             return
         table = cls.model.__table__
+        if chunk is None:
+            columns = max(len(rows[0]), 1)
+            chunk = max(1, MAX_BIND_PARAMS // columns)
         for start in range(0, len(rows), chunk):
             await session.execute(insert(table), rows[start : start + chunk])
 
