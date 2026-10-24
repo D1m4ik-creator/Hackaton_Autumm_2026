@@ -15,7 +15,7 @@ app/
   core/        config (настройки из .env), engine (SessionLocal, SessionDep), security (JWT, вход)
   db/models/   таблицы SQLAlchemy (Base + naming convention)
   db/schemas/  pydantic-схемы API; CamelModel: snake_case в Python, camelCase в JSON
-  db/migration одна ревизия churn-таблиц поверх auth_sessions
+  db/migration три ревизии: auth_sessions, churn-таблицы, users
   dao/         запросы к БД; новые методы без commit (коммитит crud в конце единицы работы)
   crud/        бизнес-логика: source (замена снимка), recalc (пересчёт), customers, analytics, model_settings, metrics
   routers/     тонкие эндпоинты; все под /api/v1 с авторизацией, кроме /metrics

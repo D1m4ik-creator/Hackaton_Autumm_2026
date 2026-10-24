@@ -5,8 +5,8 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      # 5433 на хосте, чтобы не конфликтовать с локально установленным PostgreSQL
-      - "${POSTGRES_PORT:-5433}:5432"
+      # 5433 на хосте, чтобы не конфликтовать с локальным PostgreSQL; наружу не публикуется
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
     volumes:
       # Схему создаёт Alembic при старте api, данные грузит само приложение из origin_data
       - pgdata:/var/lib/postgresql/data

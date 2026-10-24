@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
@@ -25,6 +26,11 @@ from app.db.models.sessions import AuthSession
 from app.db.schemas.auth import CurrentUser
 
 
+def _new_expires_at() -> datetime:
+    """Конец сессии: каждая ротация refresh продлевает её на refresh_token_expire_days"""
+    return datetime.now(timezone.utc) + timedelta(days=get_settings().jwt.refresh_token_expire_days)
+
+
 def _admin_user() -> CurrentUser:
     return CurrentUser(login=get_settings().admin.login, role="admin")
 
@@ -35,14 +41,17 @@ async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUs
         return _admin_user()
     user = await UsersDAO.find_by_login_or_email(db, login)
     if not user:
-        verify_password(password, DUMMY_HASH)
+        await asyncio.to_thread(verify_password, password, DUMMY_HASH)
         return None
-    if not verify_password(password, user.password_hash):
+    if not await asyncio.to_thread(verify_password, password, user.password_hash):
+        return None
+    if user.login == get_settings().admin.login:
+        # Менеджер с логином админа не должен получить токен с sub админа
         return None
     return CurrentUser(login=user.login, role=user.role, email=user.email)
 
 
-async def _find_user(login: str) -> CurrentUser | None:
+async def find_user(login: str) -> CurrentUser | None:
     """Пользователь по логину из токена; менеджер проверяется по БД на каждом запросе (удалённый теряет доступ сразу)"""
     if login == get_settings().admin.login:
         return _admin_user()
@@ -56,7 +65,7 @@ async def _find_user(login: str) -> CurrentUser | None:
 
 async def get_current_user(token: str = Depends(get_token)) -> CurrentUser:
     payload = access_decode_token(token)
-    user = await _find_user(payload.get("sub", ""))
+    user = await find_user(payload.get("sub", ""))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
     return user
@@ -80,7 +89,7 @@ async def start_session(db: AsyncSession, login: str) -> tuple[str, str]:
     await SessionsDAO.delete_expired(db)
     session_id = uuid.uuid4()
     access_token, refresh_token = _issue_pair(login, session_id)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=get_settings().jwt.refresh_token_expire_days)
+    expires_at = _new_expires_at()
     await SessionsDAO.add(
         db, id=session_id, login=login, refresh_token_hash=hash_token(refresh_token), expires_at=expires_at
     )
@@ -108,13 +117,15 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> tuple[s
     token_hash = hash_token(refresh_token)
 
     login = payload.get("sub", "")
-    if not await _find_user(login):
+    if not await find_user(login):
         # Менеджера удалили: все его сессии закрываются
         await SessionsDAO.delete_by_login(db, login)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token не действителен")
 
     access_token, new_refresh_token = _issue_pair(login, session_id)
-    if await SessionsDAO.rotate_refresh_hash(db, session_id, token_hash, hash_token(new_refresh_token)):
+    if await SessionsDAO.rotate_refresh_hash(
+        db, session_id, token_hash, hash_token(new_refresh_token), _new_expires_at()
+    ):
         return access_token, new_refresh_token
 
     auth_session = await SessionsDAO.find_by_id(db, session_id)

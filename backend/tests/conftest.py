@@ -16,7 +16,9 @@ import os
 # Переменные окружения имеют приоритет над backend/.env.
 os.environ.setdefault("POSTGRES_USER", "postgres")
 os.environ.setdefault("POSTGRES_PASSWORD", "change_me")
-os.environ.setdefault("POSTGRES_DB", "hackathon_test")
+# Принудительно тестовая база: тесты её удаляют и создают заново, рабочую трогать нельзя
+os.environ["POSTGRES_DB"] = os.environ.get("TEST_POSTGRES_DB", "hackathon_test")
+assert os.environ["POSTGRES_DB"].endswith("_test"), "тестовая база должна оканчиваться на _test"
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5433")
 os.environ.setdefault("JWT_SECRET_KEY", "0" * 64)
