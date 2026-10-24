@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import EmailStr, Field, field_validator
 
-from .auth import Role
+from .auth import Role, StoredRole
 from .common import CamelModel
 
 LOGIN_PATTERN = r"^[A-Za-z0-9_.-]+$"
@@ -13,6 +13,8 @@ class UserCreate(CamelModel):
     login: str = Field(min_length=3, max_length=50, pattern=LOGIN_PATTERN)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # admin может создать только суперадмин; по умолчанию создаётся менеджер
+    role: StoredRole = "manager"
 
     @field_validator("email")
     @classmethod

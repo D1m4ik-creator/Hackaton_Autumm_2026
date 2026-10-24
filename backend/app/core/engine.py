@@ -30,8 +30,26 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+async def get_read_session() -> AsyncIterator[AsyncSession]:
+    """Сессия только для чтения: одна транзакция REPEATABLE READ READ ONLY.
+
+    Все SELECT одного запроса видят единый снимок, поэтому ответ не смешивает
+    версии данных даже при параллельной замене снимка. Уровень изоляции и
+    READ ONLY сбрасываются при возврате соединения в пул.
+    """
+    async with SessionLocal() as session:
+        await session.connection(
+            execution_options={
+                "isolation_level": "REPEATABLE READ",
+                "postgresql_readonly": True,
+            }
+        )
+        yield session
+
+
 async def close_engine() -> None:
     await engine.dispose()
 
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+ReadSessionDep = Annotated[AsyncSession, Depends(get_read_session)]

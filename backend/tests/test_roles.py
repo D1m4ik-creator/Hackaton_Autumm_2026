@@ -34,7 +34,7 @@ async def manager(admin: AsyncClient):
 
 
 async def test_admin_me_has_role(admin: AsyncClient):
-    assert (await admin.get("/api/v1/auth/me")).json()["role"] == "admin"
+    assert (await admin.get("/api/v1/auth/me")).json()["role"] == "superadmin"
 
 
 async def test_create_manager_and_login_by_login_or_email(admin: AsyncClient):
@@ -93,6 +93,17 @@ async def test_deleted_manager_loses_access(admin: AsyncClient, manager):
     async with await _new_client() as c:
         assert await _login(c, MANAGER["login"], MANAGER["password"]) == 401
     assert (await admin.delete(f"/api/v1/users/{user_id}")).status_code == 404
+
+
+async def test_recreated_manager_rejects_old_token(admin: AsyncClient, manager):
+    """Менеджера удалили и создали заново с тем же логином — старый access-токен (другой uid) не действует."""
+    m, user_id = manager
+    assert (await admin.delete(f"/api/v1/users/{user_id}")).status_code == 204
+    recreated = await admin.post("/api/v1/users", json=MANAGER)
+    assert recreated.status_code == 201
+    assert recreated.json()["id"] != user_id
+    # Старый токен ещё в cookie и по сроку жив, но несёт прежний uid
+    assert (await m.get("/api/v1/auth/me")).status_code == 401
 
 
 async def test_password_change_closes_old_sessions(admin: AsyncClient, manager):

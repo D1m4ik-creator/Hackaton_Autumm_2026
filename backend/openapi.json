@@ -32,7 +32,7 @@
           "health"
         ],
         "summary": "Health",
-        "description": "Проверка, что API жив и база отвечает",
+        "description": "Готовность сервиса: база отвечает и видно состояние данных.\n\nОтдаёт число клиентов и версию последнего пересчёта. Если база недоступна —\n503 без деталей (внутренности наружу не раскрываем). Сессия открывается внутри\nручки, чтобы поймать и сбой самого соединения.",
         "operationId": "health_api_v1_health_get",
         "responses": {
           "200": {
@@ -42,6 +42,9 @@
                 "schema": {}
               }
             }
+          },
+          "503": {
+            "description": "База недоступна (status=unavailable)"
           }
         }
       }
@@ -69,6 +72,26 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов, попробуйте позже",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
               }
             }
           },
@@ -100,6 +123,26 @@
                 "schema": {}
               }
             }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Слишком много запросов, попробуйте позже",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         }
       }
@@ -118,6 +161,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -267,6 +320,16 @@
               }
             }
           },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -312,6 +375,26 @@
               }
             }
           },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ресурс не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -343,6 +426,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         }
       }
@@ -365,6 +458,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         }
       },
@@ -373,13 +476,47 @@
           "model"
         ],
         "summary": "Patch Settings",
-        "description": "Частичное обновление настроек модели с пересчётом (только администратор)",
+        "description": "Частичное обновление настроек модели с пересчётом (только администратор).\n\nТело — произвольный JSON-объект с изменяемыми ключами: ``asOf`` (дата оценки),\n``weights`` (веса признаков), ``bias``, ``threshold``, ``thresholds`` (пороги\nуровней), ``expiresSoonDays``, ``horizonDays``. Неизвестные ключи сохраняются.",
         "operationId": "patch_settings_api_v1_model_settings_patch",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "title": "Body"
+                "type": "object",
+                "title": "Body",
+                "description": "Частичные настройки модели; передаются только изменяемые ключи"
+              },
+              "examples": {
+                "asOf": {
+                  "summary": "Момент оценки (на какую дату считать риск)",
+                  "value": {
+                    "asOf": "2026-10-19T15:00:00Z"
+                  }
+                },
+                "thresholds": {
+                  "summary": "Пороги уровней по score 0..100",
+                  "value": {
+                    "thresholds": {
+                      "high": 70,
+                      "medium": 35
+                    }
+                  }
+                },
+                "weight": {
+                  "summary": "Изменить вес признака модели",
+                  "value": {
+                    "weights": {
+                      "has_prolong_wait": 3.5
+                    }
+                  }
+                },
+                "mixed": {
+                  "summary": "Несколько параметров сразу",
+                  "value": {
+                    "bias": -2.5,
+                    "horizonDays": 30
+                  }
+                }
               }
             }
           },
@@ -392,6 +529,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ModelSettingsPatchOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Сервис временно недоступен (идёт пересчёт данных)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -448,8 +615,45 @@
               }
             }
           },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Секция или пункт настроек не найдены"
+            "description": "Ресурс не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Сервис временно недоступен (идёт пересчёт данных)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -489,6 +693,46 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SnapshotLoadResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Тело запроса превышает допустимый размер",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Сервис временно недоступен (идёт пересчёт данных)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -539,6 +783,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         }
       }
@@ -549,7 +803,7 @@
           "users"
         ],
         "summary": "List Users",
-        "description": "Список менеджеров (только администратор)",
+        "description": "Суперадмин видит админов и менеджеров, админ только менеджеров",
         "operationId": "list_users_api_v1_users_get",
         "responses": {
           "200": {
@@ -565,6 +819,26 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           }
         }
       },
@@ -573,7 +847,7 @@
           "users"
         ],
         "summary": "Create User",
-        "description": "Создать менеджера: логин, почта, пароль (только администратор)",
+        "description": "Создать менеджера (логин, почта, пароль); поле role=admin создаёт админа, это может только суперадмин",
         "operationId": "create_user_api_v1_users_post",
         "requestBody": {
           "content": {
@@ -592,6 +866,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт (например, логин уже занят)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             }
@@ -615,7 +919,7 @@
           "users"
         ],
         "summary": "Update User",
-        "description": "Изменить логин, почту или пароль менеджера (только администратор)",
+        "description": "Изменить логин, почту или пароль; админов меняет только суперадмин",
         "operationId": "update_user_api_v1_users__userId__patch",
         "parameters": [
           {
@@ -650,6 +954,46 @@
               }
             }
           },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ресурс не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Конфликт (например, логин уже занят)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -667,7 +1011,7 @@
           "users"
         ],
         "summary": "Delete User",
-        "description": "Удалить менеджера и закрыть его сессии (только администратор)",
+        "description": "Удалить пользователя и закрыть его сессии; админов удаляет только суперадмин",
         "operationId": "delete_user_api_v1_users__userId__delete",
         "parameters": [
           {
@@ -684,6 +1028,36 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ресурс не найден",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -735,6 +1109,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "superadmin",
               "admin",
               "manager"
             ],
@@ -1057,6 +1432,24 @@
         "title": "CustomerTransactions",
         "description": "Сводка по транзакциям клиента"
       },
+      "ErrorOut": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail",
+            "description": "Человеко-читаемое описание ошибки",
+            "examples": [
+              "Описание ошибки"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "ErrorOut",
+        "description": "Тело ответа об ошибке."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1246,6 +1639,7 @@
               "$ref": "#/components/schemas/SnapshotAccountIn"
             },
             "type": "array",
+            "maxItems": 200000,
             "title": "Accounts"
           },
           "services": {
@@ -1253,6 +1647,7 @@
               "$ref": "#/components/schemas/SnapshotServiceIn"
             },
             "type": "array",
+            "maxItems": 600000,
             "title": "Services"
           },
           "transactions": {
@@ -1260,6 +1655,7 @@
               "$ref": "#/components/schemas/SnapshotTransactionIn"
             },
             "type": "array",
+            "maxItems": 2000000,
             "title": "Transactions"
           }
         },
@@ -1528,6 +1924,15 @@
             "maxLength": 128,
             "minLength": 8,
             "title": "Password"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "manager"
+            ],
+            "title": "Role",
+            "default": "manager"
           }
         },
         "type": "object",
@@ -1574,6 +1979,7 @@
           "role": {
             "type": "string",
             "enum": [
+              "superadmin",
               "admin",
               "manager"
             ],
