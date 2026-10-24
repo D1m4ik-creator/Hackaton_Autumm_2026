@@ -7,6 +7,10 @@ from app.core.security import hash_token
 from app.dao.session import SessionsDAO
 
 
+def _expires() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(days=30)
+
+
 def _session_values(**overrides):
     values = {
         "id": uuid.uuid4(),
@@ -51,7 +55,7 @@ async def test_rotate_refresh_hash_success(db_session):
     old_hash = created.refresh_token_hash
     new_hash = hash_token("new-token")
 
-    rotated = await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, new_hash)
+    rotated = await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, new_hash, _expires())
     assert rotated is True
     created_id = created.id
 
@@ -69,8 +73,8 @@ async def test_rotate_refresh_hash_rejects_stale_hash(db_session):
     created = await SessionsDAO.add(db_session, **_session_values())
     old_hash = created.refresh_token_hash
 
-    assert await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, hash_token("t2")) is True
-    assert await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, hash_token("t3")) is False
+    assert await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, hash_token("t2"), _expires()) is True
+    assert await SessionsDAO.rotate_refresh_hash(db_session, created.id, old_hash, hash_token("t3"), _expires()) is False
 
 
 async def test_delete_expired(db_session):

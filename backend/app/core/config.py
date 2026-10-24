@@ -1,12 +1,17 @@
+import logging
 from functools import lru_cache
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
+
+logger = logging.getLogger(__name__)
+
+WEAK_PASSWORDS = {"admin12345", "admin", "password", "12345678"}
 
 
 class DatabaseConfig(BaseModel):
@@ -70,6 +75,27 @@ class Config(BaseSettings):
     admin_password: SecretStr = Field(min_length=8)
 
     database_echo: bool = False
+
+    @model_validator(mode="after")
+    def check_secrets(self) -> "Config":
+        """Секреты из .env.example публичны: на деплое с HTTPS (cookie_secure) с ними приложение не стартует"""
+        if self.jwt_secret_key.get_secret_value() == self.jwt_refresh_secret_key.get_secret_value():
+            raise ValueError("JWT_SECRET_KEY и JWT_REFRESH_SECRET_KEY должны быть разными")
+        weak = []
+        for name, value in (
+            ("JWT_SECRET_KEY", self.jwt_secret_key.get_secret_value()),
+            ("JWT_REFRESH_SECRET_KEY", self.jwt_refresh_secret_key.get_secret_value()),
+            ("ADMIN_PASSWORD", self.admin_password.get_secret_value()),
+            ("POSTGRES_PASSWORD", self.postgres_password.get_secret_value()),
+        ):
+            if value.startswith("change_me") or value in WEAK_PASSWORDS:
+                weak.append(name)
+        if weak:
+            message = f"В .env остались значения из примера: {', '.join(weak)}. Задайте свои"
+            if self.cookie_secure:
+                raise ValueError(message)
+            logger.warning(message)
+        return self
 
     # Список origin'ов фронта через запятую
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
