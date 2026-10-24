@@ -110,6 +110,7 @@ def _config(**overrides) -> Config:
     base = dict(
         postgres_user="u", postgres_password="strong-db-pass", postgres_db="d", postgres_host="h",
         jwt_secret_key="a" * 40, jwt_refresh_secret_key="b" * 40, admin_login="admin", admin_password="Str0ng-admin-pass",
+        session_secret_key="c" * 40,
     )
     return Config(_env_file=None, **{**base, **overrides})
 

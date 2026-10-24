@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { isAdminRole } from '../shared/lib/roles'
 
 // isLoading здесь не проверяется — AuthGate (app/App.tsx) держит сплэш-экран,
 // пока AuthProvider не определит сессию, так что к моменту рендера этого
@@ -9,7 +10,7 @@ export function ProtectedRoute({ children, adminOnly = false }: { children: Reac
   const { user } = useAuth()
 
   if (!user) return <Navigate to="/login" replace />
-  if (adminOnly && user.role !== 'admin') return <Navigate to="/" replace />
+  if (adminOnly && !isAdminRole(user.role)) return <Navigate to="/" replace />
 
   return <>{children}</>
 }

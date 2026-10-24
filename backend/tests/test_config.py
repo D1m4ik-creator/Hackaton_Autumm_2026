@@ -18,6 +18,7 @@ def _make_config(**overrides) -> Config:
         "jwt_refresh_secret_key": "b" * 32,
         "admin_login": "admin",
         "admin_password": "password123",
+        "session_secret_key": "c" * 32,
     }
     base.update(overrides)
     return Config(_env_file=None, **base)

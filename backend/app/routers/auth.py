@@ -10,28 +10,6 @@ from app.db.schemas.auth import CurrentUser, UserLogin
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
-    """Ставит cookie с токенами; refresh=None — оставить в браузере текущий refresh"""
-    settings = get_settings()
-    response.set_cookie(
-        key=ACCESS_COOKIE,
-        value=access_token,
-        httponly=True,
-        samesite="lax",
-        secure=settings.cookie_secure,
-        max_age=settings.jwt.access_token_expire_minutes * 60,
-    )
-    if refresh_token:
-        response.set_cookie(
-            key=REFRESH_COOKIE,
-            value=refresh_token,
-            httponly=True,
-            samesite="lax",
-            secure=settings.cookie_secure,
-            max_age=settings.jwt.refresh_token_expire_days * 60 * 60 * 24,
-        )
-
-
 @router.post("/login")
 @limiter.limit(login_limit)
 async def login(request: Request, db: SessionDep, user_data: UserLogin, response: Response):
@@ -40,7 +18,7 @@ async def login(request: Request, db: SessionDep, user_data: UserLogin, response
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
 
     access_token, refresh_token = await crud_auth.start_session(db, user.login)
-    _set_auth_cookies(response, access_token, refresh_token)
+    crud_auth.set_auth_cookies(response, access_token, refresh_token)
     return {"message": "Успешная авторизация"}
 
 
@@ -48,7 +26,7 @@ async def login(request: Request, db: SessionDep, user_data: UserLogin, response
 @limiter.limit(refresh_limit)
 async def refresh(request: Request, db: SessionDep, response: Response):
     access_token, refresh_token = await crud_auth.rotate_session(db, request.cookies.get(REFRESH_COOKIE))
-    _set_auth_cookies(response, access_token, refresh_token)
+    crud_auth.set_auth_cookies(response, access_token, refresh_token)
     return {"status": "ok"}
 
 

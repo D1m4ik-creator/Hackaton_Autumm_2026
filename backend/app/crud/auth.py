@@ -3,13 +3,15 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from hmac import compare_digest
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.engine import SessionLocal
 from app.core.security import (
+    ACCESS_COOKIE,
     DUMMY_HASH,
+    REFRESH_COOKIE,
     access_decode_token,
     create_access_token,
     create_refresh_token,
@@ -24,6 +26,32 @@ from app.dao.session import SessionsDAO
 from app.dao.user import UsersDAO
 from app.db.models.sessions import AuthSession
 from app.db.schemas.auth import CurrentUser
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
+    """Ставит cookie с токенами; refresh=None — оставить в браузере текущий refresh.
+
+    Общий хелпер для локального логина (routers/auth.py) и колбэка OIDC
+    (routers/oidc.py) — обе точки входа должны производить одинаковую сессию.
+    """
+    settings = get_settings()
+    response.set_cookie(
+        key=ACCESS_COOKIE,
+        value=access_token,
+        httponly=True,
+        samesite="lax",
+        secure=settings.cookie_secure,
+        max_age=settings.jwt.access_token_expire_minutes * 60,
+    )
+    if refresh_token:
+        response.set_cookie(
+            key=REFRESH_COOKIE,
+            value=refresh_token,
+            httponly=True,
+            samesite="lax",
+            secure=settings.cookie_secure,
+            max_age=settings.jwt.refresh_token_expire_days * 60 * 60 * 24,
+        )
 
 
 def _new_expires_at() -> datetime:

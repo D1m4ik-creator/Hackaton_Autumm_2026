@@ -10,6 +10,7 @@ import { getWeightSum, readModelSettings, toSettingsPatch, validateModelSettings
 import type { ModelSettings } from '../../../entities/model-settings'
 import { AddModelFeatureModal } from './AddModelFeatureModal'
 import { useAuth } from '../../../context/AuthContext'
+import { isAdminRole } from '../../../shared/lib/roles'
 import './model-settings-form.css'
 
 const weightColors = ['var(--dashboard-accent-bright)', 'var(--dashboard-text)', 'var(--dashboard-ring-medium)', 'var(--dashboard-muted)']
@@ -24,7 +25,7 @@ function localDateTime(value: string | null): string {
 
 export function ModelSettingsForm() {
   const { user } = useAuth()
-  const readOnly = user?.role !== 'admin'
+  const readOnly = !isAdminRole(user?.role)
   const { data, loading, error, reload, setData } = useApiResource(getModelSettings)
   const { message } = App.useApp()
   const [draft, setDraft] = useState<{ value: ModelSettings; baseline: ModelSettings } | null>(null)

@@ -8,6 +8,8 @@ const API_URL = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//$
 const API_PREFIX = '/api/v1'
 export const API_BASE_URL = `${API_URL}${API_PREFIX}`
 export const METRICS_URL = `${API_URL}/metrics`
+// Полный переход браузера (не XHR) — backend/app/routers/oidc.py редиректит на Authentik
+export const OIDC_LOGIN_URL = `${API_BASE_URL}/auth/oidc/login`
 
 export class ApiError extends Error {
   status: number
@@ -51,6 +53,13 @@ function isCurrentUserCheck(url: string | undefined): boolean {
   return !!url && /\/auth\/me(?:[/?]|$)/.test(url)
 }
 
+// Тихая фоновая проверка "доступен ли вход через OIDC" (рисовать ли кнопку
+// на LoginPage) — не действие пользователя, 404/5xx тут не должны всплывать
+// тостом (например, пока бэк со свежим /auth/oidc/* ещё не пересобран).
+function isOidcStatusCheck(url: string | undefined): boolean {
+  return !!url && /\/auth\/oidc\/status(?:[/?]|$)/.test(url)
+}
+
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -84,9 +93,10 @@ http.interceptors.response.use(
     const apiMessage = formatApiError(status, error.response.data, url)
     if (status === 401 && !isAuthAction(url)) window.dispatchEvent(new Event('session-expired'))
 
-    // Своя ошибка на форме логина (login/refresh/logout) и тихий статус
-    // "ещё не залогинен" (me) не дублируем глобальным тостом.
-    if (!isAuthAction(url) && !isCurrentUserCheck(url)) {
+    // Своя ошибка на форме логина (login/refresh/logout), тихий статус
+    // "ещё не залогинен" (me) и фоновая проверка доступности OIDC не
+    // дублируем глобальным тостом.
+    if (!isAuthAction(url) && !isCurrentUserCheck(url) && !isOidcStatusCheck(url)) {
       if (status >= 500) {
         message.error('Сервер временно недоступен. Попробуйте позже.')
       } else if (status !== 401) {
