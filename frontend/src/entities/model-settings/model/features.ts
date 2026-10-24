@@ -1,0 +1,17 @@
+import type { ModelFeatureMeta } from './types'
+
+// Фиксированный набор признаков реальной модели (backend/app/ml/churn_model.py,
+// ModelConfig.weights) — в отличие от старой моковой формы, добавить новый
+// признак из панели нельзя: он должен быть сначала реализован в модели.
+export const MODEL_FEATURES: ModelFeatureMeta[] = [
+  { code: 'has_prolong_wait', label: 'Есть услуга в ожидании оплаты', hint: 'На аккаунте есть услуга в статусе prolong_wait' },
+  { code: 'prolong_wait_without_funds', label: 'Не хватает денег на ожидающую услугу', hint: 'Баланса (с бонусным) не хватает оплатить услугу в ожидании' },
+  { code: 'failed_payment_ratio', label: 'Доля неуспешных платежей', hint: 'Чем больше платежей не прошло — тем выше вклад' },
+  { code: 'balance_deficit', label: 'Не хватит баланса на продления', hint: 'Баланса не хватает на ближайшие платежи по активным услугам' },
+  { code: 'autoprolong_off_ratio', label: 'Доля услуг без автопродления', hint: 'Среди активных услуг аккаунта' },
+  { code: 'expires_soon_no_autoprolong', label: 'Скоро истекает без автопродления', hint: 'Горизонт задаётся полем «Скоро истекает, дней» ниже' },
+  { code: 'suspended_ratio', label: 'Доля приостановленных услуг', hint: '' },
+  { code: 'deleted_blocked_ratio', label: 'Доля удалённых/заблокированных услуг', hint: '' },
+  { code: 'full_autoprolong_coverage', label: 'Везде включено автопродление', hint: 'Защитный признак — снижает риск (обычно отрицательный вес)' },
+  { code: 'sufficient_funds', label: 'Хватает денег на продления', hint: 'Защитный признак — снижает риск (обычно отрицательный вес)' },
+]

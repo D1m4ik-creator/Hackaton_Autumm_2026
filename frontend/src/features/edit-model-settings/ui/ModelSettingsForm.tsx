@@ -1,20 +1,22 @@
-import { Alert, App, Button, ConfigProvider, Input, InputNumber, Slider, Spin } from 'antd'
-import { DeleteOutlined } from '@ant-design/icons'
+import { Alert, App, Button, ConfigProvider, Input, InputNumber, Popconfirm, Slider, Spin } from 'antd'
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import type { CSSProperties, FormEvent } from 'react'
-import { getModelSettings, patchModelSettings } from '../../../api/model-settings'
+import { deleteModelWeight, getModelSettings, patchModelSettings } from '../../../api/model-settings'
 import { useApiResource } from '../../../api/useApiResource'
 import { useEventsStore } from '../../../api/events'
 import { formatDateTime } from '../../../shared/lib/format'
-import { getWeightSum, readModelSettings, toSettingsPatch, validateModelSettings } from '../../../entities/model-settings'
+import { defaultModelSettings, MODEL_FEATURES, readModelSettings, toSettingsPatch, validateModelSettings } from '../../../entities/model-settings'
 import type { ModelSettings } from '../../../entities/model-settings'
-import { AddModelFeatureModal } from './AddModelFeatureModal'
 import { useAuth } from '../../../context/AuthContext'
 import { isAdminRole } from '../../../shared/lib/roles'
 import './model-settings-form.css'
 
 const weightColors = ['var(--dashboard-accent-bright)', 'var(--dashboard-text)', 'var(--dashboard-ring-medium)', 'var(--dashboard-muted)']
 const sliderTheme = { components: { Slider: { railSize: 6, handleSize: 18, handleSizeHover: 18, handleLineWidth: 0, handleLineWidthHover: 0, railBg: 'var(--dashboard-ring-track)', railHoverBg: 'var(--dashboard-ring-track)' } } }
+// Реальные веса — коэффициенты логрегрессии (app/ml/churn_model.py), не доли
+// 0..1: диапазон слайдера даёт запас сверх текущих дефолтов (±3) для подбора.
+const WEIGHT_RANGE = { min: -5, max: 5, step: 0.1 }
 
 function localDateTime(value: string | null): string {
   if (!value) return ''
@@ -29,9 +31,9 @@ export function ModelSettingsForm() {
   const { data, loading, error, reload, setData } = useApiResource(getModelSettings)
   const { message } = App.useApp()
   const [draft, setDraft] = useState<{ value: ModelSettings; baseline: ModelSettings } | null>(null)
-  const [addingFeature, setAddingFeature] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [togglingFeature, setTogglingFeature] = useState<string | null>(null)
 
   const saved = data ? readModelSettings(data.settings, data.defaults) : null
   const value = draft?.value ?? saved
@@ -43,8 +45,8 @@ export function ModelSettingsForm() {
     setSaveError(null)
   }
 
-  function setWeight(id: string, weight: number) {
-    edit((settings) => ({ ...settings, features: settings.features.map((feature) => feature.id === id ? { ...feature, weight } : feature) }))
+  function setWeight(code: string, weight: number) {
+    edit((settings) => ({ ...settings, weights: { ...settings.weights, [code]: weight } }))
   }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -65,6 +67,38 @@ export function ModelSettingsForm() {
     } finally { setSaving(false) }
   }
 
+  // Исключение/возврат признака — отдельные немедленные запросы (DELETE/PATCH
+  // одного веса), а не часть черновика формы: это структурное изменение набора
+  // признаков модели, а не правка значения веса. Сбрасываем черновик следом,
+  // чтобы несохранённые правки слайдеров не разошлись с новым списком признаков.
+  async function removeFeature(code: string, label: string) {
+    if (readOnly || togglingFeature) return
+    setTogglingFeature(code)
+    try {
+      const response = await deleteModelWeight(code)
+      setData(response)
+      setDraft(null)
+      useEventsStore.getState().invalidate()
+      message.success(`Признак «${label}» исключён из модели`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Не удалось исключить признак')
+    } finally { setTogglingFeature(null) }
+  }
+
+  async function restoreFeature(code: string, label: string) {
+    if (readOnly || togglingFeature) return
+    setTogglingFeature(code)
+    try {
+      const response = await patchModelSettings({ weights: { [code]: defaultModelSettings.weights[code] ?? 0 } })
+      setData(response)
+      setDraft(null)
+      useEventsStore.getState().invalidate()
+      message.success(`Признак «${label}» возвращён в модель`)
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : 'Не удалось вернуть признак')
+    } finally { setTogglingFeature(null) }
+  }
+
   if (!data || !value) return error
     ? <Alert type="error" title={error} action={<Button onClick={reload}>Повторить</Button>} />
     : <Spin />
@@ -77,32 +111,60 @@ export function ModelSettingsForm() {
           <h2 id="model-weights-title">Веса признаков</h2>
           <div className="model-settings-weights__controls">
             <div className="model-settings-weights__list">
-              {value.features.map((feature, index) => {
+              {MODEL_FEATURES.map((feature, index) => {
                 const color = weightColors[Math.min(index, weightColors.length - 1)]
-                return <div className="model-weight" key={feature.id} style={{ '--weight-color': color } as CSSProperties}>
+                const isRemoved = value.removed.includes(feature.code)
+                const isToggling = togglingFeature === feature.code
+                const toggleDisabled = readOnly || (togglingFeature !== null && !isToggling)
+
+                if (isRemoved) {
+                  return <div className="model-weight model-weight--removed" key={feature.code}>
+                    <div className="model-weight__header">
+                      <label>{feature.label}</label>
+                      {!readOnly && <Button className="model-weight__restore" htmlType="button" icon={<PlusOutlined />} loading={isToggling} disabled={toggleDisabled} onClick={() => restoreFeature(feature.code, feature.label)}>Вернуть в модель</Button>}
+                    </div>
+                    <p className="model-weight__hint">Признак исключён из модели — не участвует в оценке риска</p>
+                  </div>
+                }
+
+                const weight = value.weights[feature.code] ?? 0
+                return <div className="model-weight" key={feature.code} style={{ '--weight-color': color } as CSSProperties}>
                   <div className="model-weight__header">
-                    <label id={`weight-label-${feature.id}`} htmlFor={`weight-${feature.id}`}>{feature.name}</label>
+                    <label id={`weight-label-${feature.code}`} htmlFor={`weight-${feature.code}`}>{feature.label}</label>
                     <div className="model-weight__actions">
-                      <InputNumber<number> id={`weight-${feature.id}`} aria-label={`Вес: ${feature.name}`} min={0} max={1} precision={2} step={0.01} controls={false} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight ?? 0)} />
-                      {!readOnly && <Button className="model-weight__remove" type="text" htmlType="button" icon={<DeleteOutlined />} aria-label={`Удалить признак: ${feature.name}`} title="Удалить признак" disabled={saving} onClick={() => edit((settings) => ({ ...settings, features: settings.features.filter((item) => item.id !== feature.id) }))} />}
+                      <InputNumber<number> id={`weight-${feature.code}`} aria-label={`Вес: ${feature.label}`} min={WEIGHT_RANGE.min} max={WEIGHT_RANGE.max} precision={1} step={WEIGHT_RANGE.step} controls={false} value={weight} disabled={saving || readOnly} onChange={(next) => setWeight(feature.code, next ?? 0)} />
+                      {!readOnly && <Popconfirm title={`Исключить «${feature.label}» из модели?`} okText="Исключить" cancelText="Отмена" onConfirm={() => removeFeature(feature.code, feature.label)}>
+                        <Button className="model-weight__remove" type="text" htmlType="button" icon={<DeleteOutlined />} aria-label={`Исключить признак: ${feature.label}`} title="Исключить из модели" loading={isToggling} disabled={toggleDisabled} />
+                      </Popconfirm>}
                     </div>
                   </div>
-                  <Slider className="model-weight__slider" min={0} max={1} step={0.01} value={feature.weight} disabled={saving || readOnly} onChange={(weight) => setWeight(feature.id, weight)} ariaLabelledByForHandle={`weight-label-${feature.id}`} tooltip={{ formatter: (weight) => weight?.toFixed(2) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
+                  {feature.hint && <p className="model-weight__hint">{feature.hint}</p>}
+                  <Slider className="model-weight__slider" min={WEIGHT_RANGE.min} max={WEIGHT_RANGE.max} step={WEIGHT_RANGE.step} value={weight} disabled={saving || readOnly} onChange={(next) => setWeight(feature.code, next)} ariaLabelledByForHandle={`weight-label-${feature.code}`} tooltip={{ formatter: (next) => next?.toFixed(1) }} styles={{ track: { background: color, borderRadius: 0 }, rail: { background: 'var(--dashboard-ring-track)', borderRadius: 0 } }} />
                 </div>
               })}
             </div>
-            {!readOnly && <Button className="model-settings-add" htmlType="button" disabled={saving} onClick={() => setAddingFeature(true)}>+ Добавить признак</Button>}
-            <p className="model-settings-weights__note">Сумма весов: {getWeightSum(value).toFixed(2)} · должна быть равна 1.00</p>
-            {!Array.isArray(data.defaults.features) && <p className="model-settings-weights__note">Модель расчёта пока не подключена. Веса и пороги сохраняются, но пока не влияют на оценку.</p>}
+            <p className="model-settings-weights__note">Веса — коэффициенты логистической регрессии: чем больше по модулю, тем сильнее признак двигает оценку. Отрицательные значения снижают риск.</p>
           </div>
         </section>
         <section className="model-settings-card model-settings-thresholds" aria-labelledby="model-thresholds-title">
-          <h2 id="model-thresholds-title">Пороги уровней риска</h2>
+          <h2 id="model-thresholds-title">Пороги и параметры</h2>
           <div className="model-settings-thresholds__fields">
             {(['high', 'medium'] as const).map((level) => <div className="model-threshold" key={level}>
               <label htmlFor={`threshold-${level}`}>{level === 'high' ? 'Высокий' : 'Средний'} риск, от</label>
               <InputNumber<number> id={`threshold-${level}`} aria-label={`${level === 'high' ? 'Высокий' : 'Средний'} риск, от`} min={0} max={100} precision={0} controls={false} value={value.thresholds[level]} disabled={saving || readOnly} formatter={(number, { userTyping, input }) => userTyping ? input : `${number ?? ''} баллов`} parser={(number) => Number((number ?? '').replace(/[^\d-]/g, ''))} onChange={(number) => edit((settings) => ({ ...settings, thresholds: { ...settings.thresholds, [level]: number ?? 0 } }))} />
             </div>)}
+            <div className="model-threshold">
+              <label htmlFor="model-bias">Смещение (bias)</label>
+              <InputNumber<number> id="model-bias" min={-20} max={20} precision={1} step={0.1} controls={false} value={value.bias} disabled={saving || readOnly} onChange={(number) => edit((settings) => ({ ...settings, bias: number ?? 0 }))} />
+            </div>
+            <div className="model-threshold">
+              <label htmlFor="model-expires-soon">Скоро истекает, дней</label>
+              <InputNumber<number> id="model-expires-soon" min={1} max={365} precision={0} controls={false} value={value.expiresSoonDays} disabled={saving || readOnly} onChange={(number) => edit((settings) => ({ ...settings, expiresSoonDays: number ?? settings.expiresSoonDays }))} />
+            </div>
+            <div className="model-threshold">
+              <label htmlFor="model-horizon">Горизонт прогноза, дней</label>
+              <InputNumber<number> id="model-horizon" min={1} max={365} precision={0} controls={false} value={value.horizonDays} disabled={saving || readOnly} onChange={(number) => edit((settings) => ({ ...settings, horizonDays: number ?? settings.horizonDays }))} />
+            </div>
             <div className="model-threshold">
               <label htmlFor="model-as-of">Дата расчёта</label>
               <Input id="model-as-of" type="datetime-local" value={localDateTime(value.asOf)} disabled={saving || readOnly} onChange={(event) => edit((settings) => ({ ...settings, asOf: event.target.value ? new Date(event.target.value).toISOString() : null }))} />
@@ -115,7 +177,6 @@ export function ModelSettingsForm() {
         </section>
       </form>
     </Spin>
-    {!readOnly && <AddModelFeatureModal open={addingFeature} features={value.features} onClose={() => setAddingFeature(false)} onAdd={(name, weight) => edit((settings) => ({ ...settings, features: [...settings.features, { id: `custom-${crypto.randomUUID()}`, name, weight }] }))} />}
     </ConfigProvider>
   )
 }
