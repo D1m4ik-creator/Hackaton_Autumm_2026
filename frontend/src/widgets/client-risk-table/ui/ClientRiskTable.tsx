@@ -35,7 +35,7 @@ export function ClientRiskTable() {
 
   const columns: TableColumnsType<Client> = [
     { ...sortable('accountId'), title: 'ID', dataIndex: 'accountId', width: 98, className: 'client-id-column', render: (id: number) => `#${id}` },
-    { ...sortable('name'), title: 'КЛИЕНТ / EMAIL', dataIndex: 'name', width: 270,
+    { ...sortable('name'), title: 'КЛИЕНТ / EMAIL', dataIndex: 'name', width: 270, fixed: 'left',
       render: (_, client) => <Link className="client-table-link" to={`${clientsPath}/${client.accountId}`} title={`${client.name} · ${client.email}`} aria-label={`Открыть клиента ${client.name}`} onClick={(event) => event.stopPropagation()}>{client.name} · {client.email}</Link> },
     { ...sortable('balanceCents'), title: 'БАЛАНС', dataIndex: 'balanceCents', width: 144, align: 'center', render: formatEuroCents },
     { ...sortable('totalReplenishedCents'), title: 'ПОПОЛНЕНИЯ', dataIndex: 'totalReplenishedCents', width: 160, align: 'center', render: (cents: number) => formatEuro(cents / 100) },
