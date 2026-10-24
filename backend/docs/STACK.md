@@ -9,7 +9,6 @@
 | ORM | SQLAlchemy 2.0 async + asyncpg | модели `Mapped[...]`, асинхронные запросы |
 | Миграции | Alembic (async env) | схема БД под контролем |
 | Валидация и конфиг | pydantic v2, pydantic-settings | схемы запросов/ответов, настройки из `.env` |
-| Пароли | pwdlib[argon2] | хэширование (вместо устаревшего passlib) |
 | JWT | PyJWT | токены (вместо устаревшего python-jose) |
 
 ## Слои (`app/`)
@@ -18,14 +17,19 @@
 main.py          приложение, CORS, подключение роутеров, lifespan
 core/config.py   настройки из .env (get_settings)
 core/engine.py   engine, сессия, SessionDep
-core/security.py хэш паролей, JWT
+core/security.py проверка логина и пароля из .env, JWT
 db/models/       модели SQLAlchemy; Base в base.py; новые модели импортировать в __init__.py
 db/schemas/      pydantic-схемы
 db/migration/    Alembic
 dao/             запросы к БД (BaseDAO + по классу на сущность)
 crud/            бизнес-логика над DAO, зависимости (get_current_user и т.п.)
 routers/         тонкие эндпоинты
+analysis/        модель риска оттока за интерфейсом (чистый Python, без БД и HTTP)
 ```
+
+Пакет `analysis/` принадлежит ML-команде: инфраструктура знает только контракт
+(`default_settings`, `validate_settings`, `analyze`) и типы из `analysis/types.py`.
+Сейчас подключена заглушка `analysis/stub.py`. Подробности — в [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Поток запроса: `router -> crud -> dao -> БД`. Роутер ничего не знает про SQL, DAO ничего не знает про HTTP.
 
@@ -42,26 +46,26 @@ routers/         тонкие эндпоинты
 
 - Абсолютные импорты `app.*`, `SessionDep` в сигнатурах.
 - Докстринги и сообщения об ошибках на русском.
-- URL со слэшем на конце (`/health/`).
+- JSON в camelCase (ключи схем), деньги — целые евроценты (`int`, в БД `BIGINT`).
+- URL без слэша на конце (`/customers`, не `/customers/`). Префикс `/api/v1` для всего, кроме `/metrics`.
 - Поля `Config` называются так же, как переменные в `.env` (регистр не важен).
 - Секреты только в `.env` (в git не попадает), образец в `.env.example`.
 
 ## Авторизация
 
-Перенесена из AuthAPI с правками (pwdlib + PyJWT, refresh хранится хэшем, claim `type`).
+Регистрации нет. Учётная запись одна, задаётся в `.env` (`ADMIN_LOGIN`, `ADMIN_PASSWORD`). Сессия живёт в браузере в двух httpOnly cookie: `users_access_token` (15 минут) и `users_refresh_token` (30 дней). В таблице `auth_sessions` хранится хэш актуального refresh-токена каждой сессии (одна запись на браузер).
 
 | Ручка | Что делает |
 |---|---|
-| `POST /auth/create_user/` | регистрация (имя, почта, пароль) |
-| `POST /auth/login_user/` | логин, ставит cookie `users_access_token` (15 мин) и `users_refresh_token` (30 дней) |
-| `POST /auth/refresh/` | новая пара токенов по refresh-cookie |
-| `POST /auth/logout/` | выход, сбрасывает refresh в БД и чистит cookie |
-| `GET /users/me/` | текущий пользователь |
+| `POST /api/v1/auth/login` | вход (`{"login": "...", "password": "..."}`), создаёт сессию и ставит обе cookie |
+| `POST /api/v1/auth/refresh` | новая пара токенов по refresh-cookie; старый refresh больше не действует |
+| `GET /api/v1/auth/me` | текущий пользователь (`{"login": "..."}`) |
+| `POST /api/v1/auth/logout` | удаляет сессию из БД и cookie |
 
-Защитить свою ручку: `current_user = Depends(crud_user.get_current_user)`.
+Замена refresh атомарная. Если тот же старый токен пришёл повторно в течение `JWT_REFRESH_GRACE_SECONDS` (30 секунд) после замены, это параллельный запрос из того же браузера: он получает только новый access. Если давно заменённый токен пришёл позже (например, украденный), сессия закрывается целиком. Просроченные сессии удаляются при каждом входе. После `logout` access-токен живёт до истечения (до 15 минут).
 
-Фронту: `fetch(..., { credentials: "include" })`, и его адрес должен быть в `CORS_ORIGINS`.
+На деплое с HTTPS включить `COOKIE_SECURE=true`.
 
-Как работает refresh: в БД лежит хэш последнего выданного refresh-токена. `/refresh/` принимает только его. Старый или чужой токен получает 401 и сбрасывает сессию.
+Защитить свою ручку: `current_user = Depends(crud_auth.get_current_user)`. Фронту: `fetch(..., { credentials: "include" })`, адрес фронта в `CORS_ORIGINS`. Swagger: `/api/v1/docs`.
 
-Ограничения: после `logout` access-токен живёт до истечения (до 15 минут); лимита запросов на логин пока нет.
+Локальная база в Docker слушает порт `5433` (5432 часто занят установленным в Windows PostgreSQL).
