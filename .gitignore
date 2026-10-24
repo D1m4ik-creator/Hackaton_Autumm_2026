@@ -9,6 +9,39 @@
 .copilot/
 .vscode/
 
+# Окружение и секреты (исключения — примеры для команды)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# SSH-ключи для деплоя (никогда не коммитим)
+gh_actions_deploy
+gh_actions_deploy.pub
+*.pem
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+
+# Docker: локальные переопределения compose
+docker-compose.override.yml
+docker-compose.*.local.yml
+
+# Логи
+*.log
+
 # OS
 .DS_Store
 Thumbs.db

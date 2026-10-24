@@ -43,7 +43,7 @@ services:
         # Адрес API подставляется в сборку фронта на этапе build
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     ports:
-      - "3000:80"
+      - "80:80"
     depends_on:
       - api
     restart: unless-stopped
