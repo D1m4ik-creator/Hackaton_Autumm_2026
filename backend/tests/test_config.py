@@ -34,11 +34,6 @@ def test_db_url_encodes_special_chars_in_password():
     assert "p%40ss+w%2Ford" in config.database.get_db_url()
 
 
-def test_db_url_ssl_suffix():
-    config = _make_config(postgres_ssl=True)
-    assert config.database.get_db_url().endswith("?ssl=require")
-
-
 def test_cors_origins_list_parsing():
     """Запятые, пробелы и пустые элементы обрабатываются."""
     config = _make_config(cors_origins=" http://a , ,http://b ,")

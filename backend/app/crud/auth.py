@@ -6,7 +6,9 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.engine import SessionLocal
 from app.core.security import (
+    DUMMY_HASH,
     access_decode_token,
     create_access_token,
     create_refresh_token,
@@ -15,25 +17,56 @@ from app.core.security import (
     hash_token,
     refresh_decode_token,
     verify_credentials,
+    verify_password,
 )
 from app.dao.session import SessionsDAO
+from app.dao.user import UsersDAO
 from app.db.models.sessions import AuthSession
 from app.db.schemas.auth import CurrentUser
 
 
-def authenticate(login: str, password: str) -> CurrentUser | None:
-    """Пользователь, если логин и пароль совпали с учётной записью из .env, иначе None"""
-    if not verify_credentials(login, password):
+def _admin_user() -> CurrentUser:
+    return CurrentUser(login=get_settings().admin.login, role="admin")
+
+
+async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUser | None:
+    """Главный администратор (из .env) или менеджер из БД; при неверных данных None"""
+    if verify_credentials(login, password):
+        return _admin_user()
+    user = await UsersDAO.find_by_login_or_email(db, login)
+    if not user:
+        verify_password(password, DUMMY_HASH)
         return None
-    return CurrentUser(login=login)
+    if not verify_password(password, user.password_hash):
+        return None
+    return CurrentUser(login=user.login, role=user.role, email=user.email)
+
+
+async def _find_user(login: str) -> CurrentUser | None:
+    """Пользователь по логину из токена; менеджер проверяется по БД на каждом запросе (удалённый теряет доступ сразу)"""
+    if login == get_settings().admin.login:
+        return _admin_user()
+    # Короткая своя сессия: ручка SSE не должна держать соединение с БД всё время потока
+    async with SessionLocal() as db:
+        user = await UsersDAO.find_one_or_none(db, login=login)
+    if not user:
+        return None
+    return CurrentUser(login=user.login, role=user.role, email=user.email)
 
 
 async def get_current_user(token: str = Depends(get_token)) -> CurrentUser:
     payload = access_decode_token(token)
-    login = payload.get("sub")
-    if login != get_settings().admin.login:
+    user = await _find_user(payload.get("sub", ""))
+    if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
-    return CurrentUser(login=login)
+    return user
+
+
+async def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+    """Пускает только главного администратора, иначе 403"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Недостаточно прав")
+    return current_user
 
 
 def _issue_pair(login: str, session_id: uuid.UUID) -> tuple[str, str]:
@@ -74,7 +107,13 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> tuple[s
     session_id = get_session_id(payload)
     token_hash = hash_token(refresh_token)
 
-    access_token, new_refresh_token = _issue_pair(payload.get("sub", ""), session_id)
+    login = payload.get("sub", "")
+    if not await _find_user(login):
+        # Менеджера удалили: все его сессии закрываются
+        await SessionsDAO.delete_by_login(db, login)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token не действителен")
+
+    access_token, new_refresh_token = _issue_pair(login, session_id)
     if await SessionsDAO.rotate_refresh_hash(db, session_id, token_hash, hash_token(new_refresh_token)):
         return access_token, new_refresh_token
 

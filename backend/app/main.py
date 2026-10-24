@@ -11,7 +11,7 @@ from app.core.config import get_settings
 from app.core.engine import SessionLocal, close_engine
 from app.core.limiter import limiter
 from app.crud.recalc import AnalysisContractError
-from app.routers import analytics, auth, customers, events, health, metrics, model_settings, source
+from app.routers import analytics, auth, customers, events, health, metrics, model_settings, source, users
 
 logger = logging.getLogger(__name__)
 
@@ -76,3 +76,4 @@ app.include_router(analytics.router, prefix=API_PREFIX)
 app.include_router(model_settings.router, prefix=API_PREFIX)
 app.include_router(source.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
+app.include_router(users.router, prefix=API_PREFIX)

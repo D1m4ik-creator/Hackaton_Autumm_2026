@@ -35,7 +35,7 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str 
 @router.post("/login")
 @limiter.limit(login_limit)
 async def login(request: Request, db: SessionDep, user_data: UserLogin, response: Response):
-    user = crud_auth.authenticate(user_data.login, user_data.password)
+    user = await crud_auth.authenticate(db, user_data.login, user_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
 

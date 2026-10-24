@@ -20,7 +20,7 @@ async def get_settings(db: SessionDep) -> ModelSettingsOut:
     return await crud_model_settings.get_view(db)
 
 
-@router.patch("/settings", response_model=ModelSettingsPatchOut)
+@router.patch("/settings", response_model=ModelSettingsPatchOut, dependencies=[Depends(crud_auth.require_admin)])
 async def patch_settings(db: SessionDep, body: Any = Body(...)) -> ModelSettingsPatchOut:
-    """Частичное обновление настроек модели с пересчётом"""
+    """Частичное обновление настроек модели с пересчётом (только администратор)"""
     return await crud_model_settings.patch_settings(db, body)
