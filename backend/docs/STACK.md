@@ -24,7 +24,12 @@ db/migration/    Alembic
 dao/             запросы к БД (BaseDAO + по классу на сущность)
 crud/            бизнес-логика над DAO, зависимости (get_current_user и т.п.)
 routers/         тонкие эндпоинты
+analysis/        модель риска оттока за интерфейсом (чистый Python, без БД и HTTP)
 ```
+
+Пакет `analysis/` принадлежит ML-команде: инфраструктура знает только контракт
+(`default_settings`, `validate_settings`, `analyze`) и типы из `analysis/types.py`.
+Сейчас подключена заглушка `analysis/stub.py`. Подробности — в [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Поток запроса: `router -> crud -> dao -> БД`. Роутер ничего не знает про SQL, DAO ничего не знает про HTTP.
 
@@ -41,7 +46,8 @@ routers/         тонкие эндпоинты
 
 - Абсолютные импорты `app.*`, `SessionDep` в сигнатурах.
 - Докстринги и сообщения об ошибках на русском.
-- URL со слэшем на конце (`/health/`).
+- JSON в camelCase (ключи схем), деньги — целые евроценты (`int`, в БД `BIGINT`).
+- URL без слэша на конце (`/customers`, не `/customers/`). Префикс `/api/v1` для всего, кроме `/metrics`.
 - Поля `Config` называются так же, как переменные в `.env` (регистр не важен).
 - Секреты только в `.env` (в git не попадает), образец в `.env.example`.
 

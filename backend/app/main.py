@@ -1,18 +1,29 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+import app.crud.recalc as crud_recalc
 from app.core.config import get_settings
-from app.core.engine import close_engine
-from app.routers import auth, health
+from app.core.engine import SessionLocal, close_engine
+from app.crud.recalc import AnalysisContractError
+from app.routers import analytics, auth, customers, events, health, metrics, model_settings, source
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Выполнение при старте приложения 
-    yield 
-    await close_engine() # Закрытие движка при завершении работы приложения
+    # Первичная загрузка снимка и пересчёт при старте; при ошибке API всё равно поднимается
+    try:
+        async with SessionLocal() as session:
+            await crud_recalc.startup(session)
+    except Exception:
+        logger.exception("Первичная загрузка и пересчёт при старте не удались")
+    yield
+    await close_engine()  # Закрытие движка при завершении работы приложения
 
 
 API_PREFIX = "/api/v1"
@@ -34,5 +45,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.exception_handler(AnalysisContractError)
+async def analysis_contract_error_handler(request: Request, exc: AnalysisContractError) -> JSONResponse:
+    """Нарушение контракта модели анализа -> 500 (транзакция уже откачена)"""
+    return JSONResponse(status_code=500, content={"detail": f"Ошибка модели анализа: {exc}"})
+
+
+# /metrics — без префикса и без входа; остальное — под /api/v1 с авторизацией
+app.include_router(metrics.router)
 app.include_router(health.router, prefix=API_PREFIX)
 app.include_router(auth.router, prefix=API_PREFIX)
+app.include_router(customers.router, prefix=API_PREFIX)
+app.include_router(analytics.router, prefix=API_PREFIX)
+app.include_router(model_settings.router, prefix=API_PREFIX)
+app.include_router(source.router, prefix=API_PREFIX)
+app.include_router(events.router, prefix=API_PREFIX)
