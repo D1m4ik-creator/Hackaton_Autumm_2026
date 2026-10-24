@@ -27,6 +27,12 @@ class SessionsDAO(BaseDAO):
         return rotated
 
     @classmethod
+    async def delete_by_login(cls, session: AsyncSession, login: str):
+        """Закрывает все сессии пользователя"""
+        await session.execute(delete(cls.model).where(cls.model.login == login))
+        await session.commit()
+
+    @classmethod
     async def delete_expired(cls, session: AsyncSession):
         """Удаляет сессии с истёкшим сроком"""
         await session.execute(delete(cls.model).where(cls.model.expires_at < func.now()))

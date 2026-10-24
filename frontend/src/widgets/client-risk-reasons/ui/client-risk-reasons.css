@@ -1,0 +1,11 @@
+.client-risk-reasons { min-height: 480px; }
+.client-risk-reasons__list { width: 100%; max-width: 560px; margin: 25px 0 0; padding: 0; list-style: none; }
+.client-risk-reasons__list li { min-height: 96px; padding-bottom: 16px; }
+.client-risk-reasons__text { font-size: 13px; line-height: 16px; }
+.client-risk-reasons__bar { position: relative; height: 8px; margin-top: 12px; background: var(--detail-progress-track); }
+.client-risk-reasons__fill { display: block; height: 100%; }
+.client-risk-reasons__bar--accent .client-risk-reasons__fill { background: #ff7a00; }
+.client-risk-reasons__bar--strong .client-risk-reasons__fill { background: var(--dashboard-text); }
+.client-risk-reasons__bar--muted .client-risk-reasons__fill { background: var(--detail-progress-muted); }
+.client-risk-reasons__bar--subtle .client-risk-reasons__fill { background: var(--detail-progress-subtle); }
+.client-risk-reasons__percent { position: absolute; top: -6px; right: 0; font-size: 12px; font-weight: 700; line-height: 15px; }

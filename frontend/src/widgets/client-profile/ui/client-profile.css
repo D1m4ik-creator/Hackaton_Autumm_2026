@@ -1,0 +1,25 @@
+.client-profile { min-width: 0; min-height: 260px; padding: var(--detail-profile-padding); border: var(--detail-profile-border-width) solid var(--detail-profile-border); border-radius: 24px; background: var(--detail-profile-bg); color: var(--dashboard-text); box-shadow: 0 16px 36px rgb(0 0 0 / 45%); }
+.client-profile__identity { display: flex; align-items: flex-start; gap: 16px; min-height: 64px; }
+.client-profile__avatar.ant-avatar { flex-shrink: 0; background: #4d4d52; color: #e6e6eb; font-size: 18px; font-weight: 700; }
+.client-profile__identity-text { min-width: 0; padding-top: 8px; }
+.client-profile__identity-text h1 { font-size: 20px; font-weight: 700; line-height: 24px; }
+.client-profile__identity-text p { margin-top: 6px; color: var(--dashboard-muted); font-size: 13px; line-height: 16px; overflow-wrap: anywhere; }
+.client-profile__tags { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.client-profile__tags .ant-tag { display: inline-flex; align-items: center; justify-content: center; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 999px; font-size: 10px; font-weight: 700; line-height: 12px; }
+.client-profile__risk.ant-tag { width: 132px; background: rgb(255 122 0 / 16%); color: #ff7a00; }
+.client-profile__status.ant-tag { width: 140px; background: var(--detail-profile-status-bg); color: var(--detail-profile-status-text); }
+.client-profile__divider { height: 1px; margin-top: 16px; background: var(--dashboard-border); }
+.client-profile__stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); height: 50px; margin: 15px 0 0; }
+.client-profile__stats > div { display: flex; flex-direction: column; align-items: center; min-width: 0; padding-top: 4px; }
+.client-profile__stats > div + div { border-left: 1px solid var(--dashboard-border); }
+.client-profile__stats dd { order: 0; margin: 0; font-size: 20px; font-weight: 700; line-height: 24px; white-space: nowrap; }
+.client-profile__stats dt { order: 1; margin-top: 4px; color: var(--dashboard-muted); font-size: 11px; line-height: 13px; }
+.client-profile__stats .client-profile__loss { color: #ff7a00; }
+
+@media (max-width: 439px) {
+  .client-profile { padding: calc(28px - var(--detail-profile-border-width)) calc(20px - var(--detail-profile-border-width)); }
+  .client-profile__identity { gap: 12px; }
+  .client-profile__identity-text h1 { font-size: 18px; }
+  .client-profile__identity-text p { font-size: 12px; }
+  .client-profile__stats dd { font-size: 18px; }
+}

@@ -1,0 +1,15 @@
+.top-clients-page .dashboard-main { padding-right: 48px; }
+.top-clients-heading { margin-bottom: 30px; }
+.top-clients-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
+.top-clients-heading p { margin-top: 5px; color: #7a7875; font-size: 13px; line-height: 16px; }
+.top-clients-page .client-risk-filters { margin-bottom: 20px; }
+
+@media (max-width: 1279px) { .top-clients-page .dashboard-main { padding-right: 32px; } }
+@media (max-width: 959px) { .top-clients-page .dashboard-main { padding-right: 24px; } }
+@media (max-width: 767px) {
+  .top-clients-page .dashboard-main { padding-right: 20px; }
+  .top-clients-heading { margin-bottom: 24px; }
+  .top-clients-heading h1 { font-size: 23px; }
+  .top-clients-heading p { line-height: 20px; }
+}
+@media (max-width: 439px) { .top-clients-page .dashboard-main { padding-right: 12px; } }

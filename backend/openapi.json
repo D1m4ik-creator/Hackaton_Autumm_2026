@@ -1,0 +1,1630 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hackathon API",
+    "description": "Backend для хакатона Autumn 2026",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/metrics": {
+      "get": {
+        "tags": [
+          "metrics"
+        ],
+        "summary": "Metrics",
+        "description": "Метрики Prometheus: только агрегаты, без входа (скрейпер не носит cookie)",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "Проверка, что API жив и база отвечает",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentUser"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "List Customers",
+        "description": "Список клиентов с фильтром, поиском, сортировкой и пагинацией",
+        "operationId": "list_customers_api_v1_customers_get",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low",
+                      "no_data"
+                    ],
+                    "type": "string"
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Фильтр по уровням риска",
+              "title": "Level"
+            },
+            "description": "Фильтр по уровням риска"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Подстрока email; только цифры — ещё и точный id",
+              "title": "Search"
+            },
+            "description": "Подстрока email; только цифры — ещё и точный id"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "id",
+                "email",
+                "balance",
+                "totalReplenished",
+                "riskScore",
+                "expectedLossCents"
+              ],
+              "type": "string",
+              "default": "riskScore",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000000,
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Pagesize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{customerId}": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Get Customer",
+        "description": "Карточка одного клиента",
+        "operationId": "get_customer_api_v1_customers__customerId__get",
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "maximum": 9223372036854775807,
+              "minimum": 1,
+              "title": "Customerid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomerCard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/summary": {
+      "get": {
+        "tags": [
+          "analytics"
+        ],
+        "summary": "Summary",
+        "description": "Сводка по всем клиентам (те же числа, что в /metrics)",
+        "operationId": "summary_api_v1_analytics_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/model/settings": {
+      "get": {
+        "tags": [
+          "model"
+        ],
+        "summary": "Get Settings",
+        "description": "Текущие эффективные настройки модели и дефолты",
+        "operationId": "get_settings_api_v1_model_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettingsOut"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "model"
+        ],
+        "summary": "Patch Settings",
+        "description": "Частичное обновление настроек модели с пересчётом (только администратор)",
+        "operationId": "patch_settings_api_v1_model_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Body"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSettingsPatchOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source/snapshot": {
+      "put": {
+        "tags": [
+          "source"
+        ],
+        "summary": "Put Snapshot",
+        "description": "Полная замена исходных данных и пересчёт в одной транзакции",
+        "operationId": "put_snapshot_api_v1_source_snapshot_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SnapshotIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotLoadResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "events"
+        ],
+        "summary": "Events",
+        "description": "Поток обновлений: опрос risk_summary.version, событие recalculated при смене версии",
+        "operationId": "events_api_v1_events_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/event-stream": {
+                "itemSchema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "string"
+                    },
+                    "event": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "retry": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "List Users",
+        "description": "Список менеджеров (только администратор)",
+        "operationId": "list_users_api_v1_users_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UserOut"
+                  },
+                  "type": "array",
+                  "title": "Response List Users Api V1 Users Get"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create User",
+        "description": "Создать менеджера: логин, почта, пароль (только администратор)",
+        "operationId": "create_user_api_v1_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{userId}": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update User",
+        "description": "Изменить логин, почту или пароль менеджера (только администратор)",
+        "operationId": "update_user_api_v1_users__userId__patch",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Userid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete User",
+        "description": "Удалить менеджера и закрыть его сессии (только администратор)",
+        "operationId": "delete_user_api_v1_users__userId__delete",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Userid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ByLevel": {
+        "properties": {
+          "high": {
+            "$ref": "#/components/schemas/LevelBucket"
+          },
+          "medium": {
+            "$ref": "#/components/schemas/LevelBucket"
+          },
+          "low": {
+            "$ref": "#/components/schemas/LevelBucket"
+          },
+          "noData": {
+            "$ref": "#/components/schemas/LevelBucket"
+          }
+        },
+        "type": "object",
+        "required": [
+          "high",
+          "medium",
+          "low",
+          "noData"
+        ],
+        "title": "ByLevel",
+        "description": "Агрегаты по всем четырём уровням риска"
+      },
+      "CurrentUser": {
+        "properties": {
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "manager"
+            ],
+            "title": "Role"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login",
+          "role"
+        ],
+        "title": "CurrentUser"
+      },
+      "CustomerCard": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "balance": {
+            "type": "integer",
+            "title": "Balance"
+          },
+          "withdrawBalance": {
+            "type": "integer",
+            "title": "Withdrawbalance"
+          },
+          "totalReplenished": {
+            "type": "integer",
+            "title": "Totalreplenished"
+          },
+          "bonusBalance": {
+            "type": "integer",
+            "title": "Bonusbalance"
+          },
+          "bonusState": {
+            "type": "string",
+            "title": "Bonusstate"
+          },
+          "riskScore": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskscore"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "no_data"
+            ],
+            "title": "Level"
+          },
+          "expectedLossCents": {
+            "type": "integer",
+            "title": "Expectedlosscents"
+          },
+          "reasonShort": {
+            "type": "string",
+            "title": "Reasonshort"
+          },
+          "reasons": {
+            "items": {
+              "$ref": "#/components/schemas/ReasonOut"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerService"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "transactions": {
+            "$ref": "#/components/schemas/CustomerTransactions"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "calculatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "withdrawBalance",
+          "totalReplenished",
+          "bonusBalance",
+          "bonusState",
+          "riskScore",
+          "level",
+          "expectedLossCents",
+          "reasonShort",
+          "reasons",
+          "details",
+          "services",
+          "transactions",
+          "asOf",
+          "calculatedAt"
+        ],
+        "title": "CustomerCard",
+        "description": "Карточка клиента (GET /customers/{customerId})"
+      },
+      "CustomerListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "balance": {
+            "type": "integer",
+            "title": "Balance"
+          },
+          "totalReplenished": {
+            "type": "integer",
+            "title": "Totalreplenished"
+          },
+          "riskScore": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Riskscore"
+          },
+          "level": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low",
+              "no_data"
+            ],
+            "title": "Level"
+          },
+          "expectedLossCents": {
+            "type": "integer",
+            "title": "Expectedlosscents"
+          },
+          "reasonShort": {
+            "type": "string",
+            "title": "Reasonshort"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "totalReplenished",
+          "riskScore",
+          "level",
+          "expectedLossCents",
+          "reasonShort"
+        ],
+        "title": "CustomerListItem",
+        "description": "Строка таблицы клиентов (GET /customers)"
+      },
+      "CustomerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "pageSize": {
+            "type": "integer",
+            "title": "Pagesize"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "pageSize"
+        ],
+        "title": "CustomerPage",
+        "description": "Страница списка клиентов"
+      },
+      "CustomerService": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "price": {
+            "type": "integer",
+            "title": "Price"
+          },
+          "autoProlong": {
+            "type": "boolean",
+            "title": "Autoprolong"
+          },
+          "paymentTerm": {
+            "type": "string",
+            "title": "Paymentterm"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expiresat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "status",
+          "price",
+          "autoProlong",
+          "paymentTerm",
+          "createdAt",
+          "expiresAt"
+        ],
+        "title": "CustomerService",
+        "description": "Услуга клиента в карточке"
+      },
+      "CustomerTransactions": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "performed": {
+            "type": "integer",
+            "title": "Performed"
+          },
+          "notPerformed": {
+            "type": "integer",
+            "title": "Notperformed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "performed",
+          "notPerformed"
+        ],
+        "title": "CustomerTransactions",
+        "description": "Сводка по транзакциям клиента"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LevelBucket": {
+        "properties": {
+          "customers": {
+            "type": "integer",
+            "title": "Customers"
+          },
+          "expectedLossCents": {
+            "type": "integer",
+            "title": "Expectedlosscents"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customers",
+          "expectedLossCents"
+        ],
+        "title": "LevelBucket",
+        "description": "Агрегат по одному уровню риска: число клиентов и сумма ожидаемых потерь"
+      },
+      "ModelSettingsOut": {
+        "properties": {
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          },
+          "defaults": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Defaults"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings",
+          "defaults",
+          "updatedAt"
+        ],
+        "title": "ModelSettingsOut",
+        "description": "Настройки модели (GET /model/settings): эффективные, дефолтные и время обновления"
+      },
+      "ModelSettingsPatchOut": {
+        "properties": {
+          "settings": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Settings"
+          },
+          "defaults": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Defaults"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "recalculatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recalculatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "settings",
+          "defaults",
+          "updatedAt",
+          "version",
+          "recalculatedAt"
+        ],
+        "title": "ModelSettingsPatchOut",
+        "description": "Ответ PATCH /model/settings: как GET плюс новая версия и время пересчёта"
+      },
+      "ReasonOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "ReasonOut",
+        "description": "Одна причина оценки риска"
+      },
+      "SnapshotAccountIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Id"
+          },
+          "email": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Email"
+          },
+          "balance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Balance"
+          },
+          "withdrawBalance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Withdrawbalance"
+          },
+          "totalReplenished": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Totalreplenished"
+          },
+          "bonusBalance": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Bonusbalance"
+          },
+          "bonusState": {
+            "type": "string",
+            "enum": [
+              "locked",
+              "unlocked"
+            ],
+            "title": "Bonusstate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "balance",
+          "withdrawBalance",
+          "totalReplenished",
+          "bonusBalance",
+          "bonusState"
+        ],
+        "title": "SnapshotAccountIn",
+        "description": "Аккаунт во входном снимке (форма data.json, лишние поля игнорируются)"
+      },
+      "SnapshotIn": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotAccountIn"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "services": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotServiceIn"
+            },
+            "type": "array",
+            "title": "Services"
+          },
+          "transactions": {
+            "items": {
+              "$ref": "#/components/schemas/SnapshotTransactionIn"
+            },
+            "type": "array",
+            "title": "Transactions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "services",
+          "transactions"
+        ],
+        "title": "SnapshotIn",
+        "description": "Полный входной снимок исходных данных"
+      },
+      "SnapshotLoadResult": {
+        "properties": {
+          "accounts": {
+            "type": "integer",
+            "title": "Accounts"
+          },
+          "services": {
+            "type": "integer",
+            "title": "Services"
+          },
+          "transactions": {
+            "type": "integer",
+            "title": "Transactions"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "recalculatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Recalculatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accounts",
+          "services",
+          "transactions",
+          "version",
+          "recalculatedAt"
+        ],
+        "title": "SnapshotLoadResult",
+        "description": "Результат загрузки снимка: что загружено и новая версия сводки"
+      },
+      "SnapshotServiceIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "ownerId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Ownerid"
+          },
+          "paymentTerm": {
+            "type": "string",
+            "enum": [
+              "hour",
+              "week",
+              "month",
+              "quarter_year",
+              "half_year",
+              "year"
+            ],
+            "title": "Paymentterm"
+          },
+          "autoProlong": {
+            "type": "boolean",
+            "title": "Autoprolong"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expiresat"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "blocked",
+              "deleted",
+              "suspended",
+              "prolong_wait"
+            ],
+            "title": "Status"
+          },
+          "price": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 0.0,
+            "title": "Price"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "ownerId",
+          "paymentTerm",
+          "autoProlong",
+          "createdAt",
+          "expiresAt",
+          "status",
+          "price"
+        ],
+        "title": "SnapshotServiceIn",
+        "description": "Услуга во входном снимке"
+      },
+      "SnapshotTransactionIn": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Id"
+          },
+          "amount": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Amount"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "performed",
+              "not_performed"
+            ],
+            "title": "Status"
+          },
+          "performedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performedat"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "prolong",
+              "order"
+            ],
+            "title": "Type"
+          },
+          "serviceId": {
+            "type": "integer",
+            "maximum": 9.223372036854776e+18,
+            "minimum": 1.0,
+            "title": "Serviceid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "amount",
+          "status",
+          "createdAt",
+          "type",
+          "serviceId"
+        ],
+        "title": "SnapshotTransactionIn",
+        "description": "Транзакция во входном снимке"
+      },
+      "SummaryOut": {
+        "properties": {
+          "customersTotal": {
+            "type": "integer",
+            "title": "Customerstotal"
+          },
+          "byLevel": {
+            "$ref": "#/components/schemas/ByLevel"
+          },
+          "expectedLossCents": {
+            "type": "integer",
+            "title": "Expectedlosscents"
+          },
+          "lossExplanation": {
+            "type": "string",
+            "title": "Lossexplanation"
+          },
+          "asOf": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asof"
+          },
+          "recalculatedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recalculatedat"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customersTotal",
+          "byLevel",
+          "expectedLossCents",
+          "lossExplanation",
+          "asOf",
+          "recalculatedAt",
+          "version"
+        ],
+        "title": "SummaryOut",
+        "description": "Сводка по всем клиентам (GET /analytics/summary)"
+      },
+      "UserCreate": {
+        "properties": {
+          "login": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 3,
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "title": "Login"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login",
+          "email",
+          "password"
+        ],
+        "title": "UserCreate"
+      },
+      "UserLogin": {
+        "properties": {
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "login",
+          "password"
+        ],
+        "title": "UserLogin"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "login": {
+            "type": "string",
+            "title": "Login"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "manager"
+            ],
+            "title": "Role"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "login",
+          "email",
+          "role",
+          "createdAt"
+        ],
+        "title": "UserOut"
+      },
+      "UserUpdate": {
+        "properties": {
+          "login": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50,
+                "minLength": 3,
+                "pattern": "^[A-Za-z0-9_.-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Login"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "email"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128,
+                "minLength": 8
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
