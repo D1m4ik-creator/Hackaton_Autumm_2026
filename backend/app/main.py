@@ -117,6 +117,9 @@ app = FastAPI(
 # Порядок важен: Starlette выполняет middleware в обратном порядке добавления
 # (добавленный последним срабатывает первым на входящий запрос) — CORS должен
 # отработать раньше, чем запрос дойдёт до SessionMiddleware/роутов
+# Ограничение размера тела — внутри CORS: иначе ответ 413 уходит без Access-Control-Allow-Origin
+# и браузер показывает фронту ошибку соединения вместо причины отказа
+app.add_middleware(BodySizeLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins_list,
@@ -124,8 +127,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# Внешний слой: ограничение размера тела должно сработать раньше разбора запроса
-app.add_middleware(BodySizeLimitMiddleware)
 
 # Нужен authlib (routers/oidc.py) — между редиректом на Authentik и колбэком
 # state/PKCE-verifier хранятся в request.session, а не в cookie с токенами

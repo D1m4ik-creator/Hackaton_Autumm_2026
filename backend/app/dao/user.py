@@ -18,6 +18,12 @@ class UsersDAO(BaseDAO):
         await session.execute(update(User).where(User.id == id).values(**values))
 
     @classmethod
+    async def lock_login(cls, session: AsyncSession, id: uuid.UUID) -> str | None:
+        """Блокирует строку пользователя до конца транзакции (FOR UPDATE) и возвращает его текущий логин"""
+        result = await session.execute(select(User.login).where(User.id == id).with_for_update())
+        return result.scalar_one_or_none()
+
+    @classmethod
     async def delete_by_id_no_commit(cls, session: AsyncSession, id: uuid.UUID) -> None:
         """Удаляет пользователя без commit (коммит делает crud)"""
         await session.execute(delete(User).where(User.id == id))

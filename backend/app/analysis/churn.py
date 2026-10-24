@@ -290,7 +290,10 @@ def analyze(source: SourceData, settings: dict, as_of: datetime) -> AnalysisResu
     ``settings`` уже прошёл ``validate_settings`` (гарантия инфраструктуры);
     отсутствующие ключи подставляются из дефолтов адаптера.
     """
-    weights = settings.get("weights") or dict(_DEFAULT_WEIGHTS)
+    # Пустой weights={} — все признаки удалены (score только по bias), а не «настроек нет»
+    weights = settings.get("weights")
+    if weights is None:
+        weights = dict(_DEFAULT_WEIGHTS)
     bias = settings.get("bias", _DEFAULT_BIAS)
     expires_soon_days = settings.get("expiresSoonDays", DEFAULT_EXPIRES_SOON_DAYS)
     horizon_days = int(settings.get("horizonDays", _DEFAULT_HORIZON_DAYS))
