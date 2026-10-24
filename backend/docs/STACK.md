@@ -5,7 +5,7 @@
 | Что | Чем | Зачем |
 |---|---|---|
 | Web | FastAPI + uvicorn | API, автодокументация на `/docs` |
-| БД | PostgreSQL 17: локально в docker (эксперименты) + общая на Supabase | основное хранилище, переключение через `ENV_FILE`, см. README |
+| БД | PostgreSQL 17 в Docker | основное хранилище |
 | ORM | SQLAlchemy 2.0 async + asyncpg | модели `Mapped[...]`, асинхронные запросы |
 | Миграции | Alembic (async env) | схема БД под контролем |
 | Валидация и конфиг | pydantic v2, pydantic-settings | схемы запросов/ответов, настройки из `.env` |

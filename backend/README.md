@@ -94,24 +94,6 @@ alembic upgrade head
 uvicorn app.main:app --reload   # http://localhost:8000/api/v1/docs
 ```
 
-## Две базы: локальная и общая (Supabase)
-
-- **Локальная** (Docker, для экспериментов): `.env` — читается по умолчанию.
-- **Общая** (Supabase, одна на команду): `.env.shared` (образец — `.env.shared.example`),
-  включается переменной `ENV_FILE`.
-
-```powershell
-$env:ENV_FILE = ".env.shared"
-alembic upgrade head
-uvicorn app.main:app --reload
-Remove-Item Env:ENV_FILE        # вернуться на локальную
-```
-
-Правила общей базы: `alembic upgrade head` запускает один человек по
-договорённости, `downgrade` — только по согласованию; схему экспериментировать
-только на локальной; строка подключения — Session pooler (порт 5432), не
-Transaction pooler (6543); в Supabase включить RLS или отключить Data API.
-
 ## Команды
 
 | Что | Команда |

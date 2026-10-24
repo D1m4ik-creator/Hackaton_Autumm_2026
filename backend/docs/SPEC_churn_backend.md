@@ -372,7 +372,7 @@ churn_recalculations_total 3
 ```
 
 - `Dockerfile` не меняется: `alembic upgrade head && uvicorn ...`; загрузка и пересчёт — в lifespan. `origin_data/` лежит в корне git-репозитория и должен быть закоммичен (сейчас не отслеживается).
-- `.env.example` / `.env.shared.example`: `SOURCE_DATA_PATH`, `SEED_ON_STARTUP=true`, `SSE_POLL_INTERVAL_SECONDS=1`.
+- `.env.example`: `SOURCE_DATA_PATH`, `SEED_ON_STARTUP=true`, `SSE_POLL_INTERVAL_SECONDS=1`.
 - `docs/STACK.md`: исправить «URL со слэшем на конце» на «без слэша»; добавить слой `analysis/`.
 - `README.md` (для жюри): `cp .env.example .env` → `docker compose up -d --build` → Swagger `http://localhost:8000/api/v1/docs`, вход логином из `.env`; список ручек; `/metrics`; как загрузить свой снимок (`PUT /api/v1/source/snapshot`); живое обновление; ссылка на `docs/ARCHITECTURE.md`.
 - `docs/ARCHITECTURE.md`: слои и поток данных (снимок → пересчёт → `risk_results`/`risk_summary` → API/SSE/metrics), гонки, интерфейс `app/analysis`, «как добавить признак» (§5), место для описания модели от ML-команды.
@@ -387,7 +387,7 @@ churn_recalculations_total 3
 
 **P3 — API, SSE, metrics** (зависит от P1, P2). Файлы: `backend/app/db/schemas/{customers,analytics,model_settings}.py`, `backend/app/dao/customer_query.py`, `backend/app/crud/{customers,analytics,model_settings,metrics}.py`, `backend/app/routers/{customers,analytics,model_settings,source,events,metrics}.py`, `backend/app/main.py` (роутеры: `/metrics` без префикса, остальные с `API_PREFIX`; lifespan из §6.4). Сделать §7, §8, §9. Проверка: без cookie все ручки, кроме `/metrics`, дают 401; сортировка по каждому полю в обе стороны; PATCH и PUT поднимают `version`, открытый `/events` присылает `recalculated`; суммы `/metrics` = `/analytics/summary`.
 
-**P4 — Документация, Docker, OpenAPI** (зависит от P1–P3). Файлы: `backend/docker-compose.yaml`, `backend/.env.example`, `backend/.env.shared.example`, `backend/README.md`, `backend/docs/STACK.md`, `backend/docs/ARCHITECTURE.md`, `backend/scripts/export_openapi.py`, `backend/openapi.json`. Сделать §10; закоммитить `origin_data/`. Проверка: с чистого `docker compose down -v && docker compose up -d --build` по README — вход, `GET /api/v1/customers` отдаёт 10 клиентов, `/metrics` отвечает.
+**P4 — Документация, Docker, OpenAPI** (зависит от P1–P3). Файлы: `backend/docker-compose.yaml`, `backend/.env.example`, `backend/README.md`, `backend/docs/STACK.md`, `backend/docs/ARCHITECTURE.md`, `backend/scripts/export_openapi.py`, `backend/openapi.json`. Сделать §10; закоммитить `origin_data/`. Проверка: с чистого `docker compose down -v && docker compose up -d --build` по README — вход, `GET /api/v1/customers` отдаёт 10 клиентов, `/metrics` отвечает.
 
 ## 12. Открытые вопросы
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 import app.crud.auth as crud_auth
+from app.core.limiter import limiter, login_limit, refresh_limit
 from app.core.config import get_settings
 from app.core.engine import SessionDep
 from app.core.security import ACCESS_COOKIE, REFRESH_COOKIE
@@ -32,7 +33,8 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str 
 
 
 @router.post("/login")
-async def login(db: SessionDep, user_data: UserLogin, response: Response):
+@limiter.limit(login_limit)
+async def login(request: Request, db: SessionDep, user_data: UserLogin, response: Response):
     user = crud_auth.authenticate(user_data.login, user_data.password)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
@@ -43,7 +45,8 @@ async def login(db: SessionDep, user_data: UserLogin, response: Response):
 
 
 @router.post("/refresh")
-async def refresh(db: SessionDep, request: Request, response: Response):
+@limiter.limit(refresh_limit)
+async def refresh(request: Request, db: SessionDep, response: Response):
     access_token, refresh_token = await crud_auth.rotate_session(db, request.cookies.get(REFRESH_COOKIE))
     _set_auth_cookies(response, access_token, refresh_token)
     return {"status": "ok"}

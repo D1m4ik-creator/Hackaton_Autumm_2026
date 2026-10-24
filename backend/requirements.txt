@@ -13,3 +13,4 @@ pydantic-settings==2.16.1
 
 # Авторизация
 PyJWT==2.15.1
+slowapi==0.1.10
