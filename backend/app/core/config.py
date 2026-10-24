@@ -81,6 +81,27 @@ class Config(BaseSettings):
 
     database_echo: bool = False
 
+    # Секрет для SessionMiddleware — authlib хранит в request.session state/PKCE
+    # между редиректом на OIDC-провайдер и колбэком (/auth/oidc/*)
+    session_secret_key: SecretStr = Field(min_length=32)
+
+    # Вход через Authentik (OIDC), опционально — локальный логин/пароль остаётся
+    # основным способом входа независимо от этого флага (см. backend/app/routers/auth.py)
+    oidc_enabled: bool = False
+    oidc_issuer: str = ""
+    oidc_client_id: str = ""
+    oidc_client_secret: SecretStr = SecretStr("")
+    oidc_redirect_uri: str = ""
+    # Куда редиректить обратно на фронт после входа/ошибки через OIDC
+    frontend_url: str = "http://localhost:3000"
+    # Authentik отдаёт все адреса в .well-known-документе с тем же хостом,
+    # с которым к нему обратились за метаданными — бэкенд внутри docker-сети
+    # ходит на authentik-server, но браузер этот хост не резолвит. Эта
+    # настройка переопределяет только authorization_endpoint (редирект
+    # браузера), token/jwks по-прежнему берутся из OIDC_ISSUER для бэкенда.
+    # Пусто — используется адрес из самого OIDC_ISSUER.
+    oidc_authorize_url: str = ""
+
     @model_validator(mode="after")
     def check_secrets(self) -> "Config":
         """Секреты из .env.example публичны: на деплое с HTTPS (cookie_secure) с ними приложение не стартует"""
@@ -92,6 +113,7 @@ class Config(BaseSettings):
             ("JWT_REFRESH_SECRET_KEY", self.jwt_refresh_secret_key.get_secret_value()),
             ("ADMIN_PASSWORD", self.admin_password.get_secret_value()),
             ("POSTGRES_PASSWORD", self.postgres_password.get_secret_value()),
+            ("SESSION_SECRET_KEY", self.session_secret_key.get_secret_value()),
         ):
             if value.startswith("change_me") or value in WEAK_PASSWORDS:
                 weak.append(name)
@@ -100,6 +122,8 @@ class Config(BaseSettings):
             if self.cookie_secure:
                 raise ValueError(message)
             logger.warning(message)
+        if self.oidc_enabled and not (self.oidc_issuer and self.oidc_client_id and self.oidc_client_secret.get_secret_value()):
+            raise ValueError("OIDC_ENABLED=true требует OIDC_ISSUER, OIDC_CLIENT_ID и OIDC_CLIENT_SECRET")
         return self
 
     # Список origin'ов фронта через запятую

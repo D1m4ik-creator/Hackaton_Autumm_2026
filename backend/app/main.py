@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.sessions import SessionMiddleware
 from starlette.datastructures import Headers
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -12,8 +13,9 @@ import app.crud.recalc as crud_recalc
 from app.core.config import get_settings
 from app.core.engine import SessionLocal, close_engine
 from app.core.limiter import limiter
+from app.core.oidc_client import register_oidc_client
 from app.crud.recalc import AnalysisContractError
-from app.routers import analytics, auth, customers, events, health, metrics, model_settings, source, users
+from app.routers import analytics, auth, customers, events, health, metrics, model_settings, oidc, source, users
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +88,11 @@ class BodySizeLimitMiddleware:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Регистрация OIDC-клиента (authlib) против Authentik — только если включено:
+    # с пустыми OIDC_ISSUER/CLIENT_ID регистрировать нечего, /auth/oidc/* и так
+    # отвечают 404 через oidc_enabled-чек в самом роутере
+    if get_settings().oidc_enabled:
+        register_oidc_client()
     # Первичная загрузка снимка и пересчёт при старте; при ошибке API всё равно поднимается
     try:
         async with SessionLocal() as session:
@@ -107,6 +114,9 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# Порядок важен: Starlette выполняет middleware в обратном порядке добавления
+# (добавленный последним срабатывает первым на входящий запрос) — CORS должен
+# отработать раньше, чем запрос дойдёт до SessionMiddleware/роутов
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origins_list,
@@ -116,6 +126,15 @@ app.add_middleware(
 )
 # Внешний слой: ограничение размера тела должно сработать раньше разбора запроса
 app.add_middleware(BodySizeLimitMiddleware)
+
+# Нужен authlib (routers/oidc.py) — между редиректом на Authentik и колбэком
+# state/PKCE-verifier хранятся в request.session, а не в cookie с токенами
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=get_settings().session_secret_key.get_secret_value(),
+    same_site="lax",
+    https_only=get_settings().cookie_secure,
+)
 
 
 app.state.limiter = limiter
@@ -147,3 +166,4 @@ app.include_router(model_settings.router, prefix=API_PREFIX)
 app.include_router(source.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
+app.include_router(oidc.router, prefix=API_PREFIX)

@@ -27,9 +27,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let active = true
     fetchCurrentUser()
-      .then(setUser)
-      .finally(() => setIsLoading(false))
+      .then((currentUser) => { if (active) setUser(currentUser) })
+      .finally(() => { if (active) setIsLoading(false) })
+    const expired = () => setUser(null)
+    window.addEventListener('session-expired', expired)
+    return () => { active = false; window.removeEventListener('session-expired', expired) }
   }, [])
 
   const login = useCallback(async (login: string, password: string) => {

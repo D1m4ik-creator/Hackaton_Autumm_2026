@@ -25,6 +25,7 @@
 .client-risk-table .client-risk-column:focus-visible .client-sort-icon { display: inline-block; }
 .client-table-link { display: block; width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: var(--dashboard-text); text-align: left; text-decoration: none; text-overflow: ellipsis; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .client-table-link:hover { color: var(--dashboard-accent); }
+.client-table-reason { color: var(--dashboard-muted); font-size: 12px; line-height: 16px; white-space: normal; overflow-wrap: anywhere; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (max-width: 767px) {

@@ -21,3 +21,7 @@ export function refresh(): Promise<{ status: string }> {
 export function getCurrentUser(): Promise<User> {
   return request('/auth/me')
 }
+
+export function getOidcStatus(): Promise<{ enabled: boolean }> {
+  return request('/auth/oidc/status')
+}

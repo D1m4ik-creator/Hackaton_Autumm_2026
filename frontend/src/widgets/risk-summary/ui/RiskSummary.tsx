@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useRiskReportStore } from '../../../entities/risk-report'
 import { useClientFiltersStore } from '../../../features/filter-clients'
 import { clientsPath as resolveClientsPath } from '../../../shared/lib/app-paths'
-import { formatEuro, formatInteger, formatPercent } from '../../../shared/lib/format'
+import { formatDateTime, formatEuro, formatInteger, formatPercent } from '../../../shared/lib/format'
 import { BentoCard } from '../../../shared/ui/bento-card'
 
 export function AccountSummary() {
@@ -14,10 +14,12 @@ export function AccountSummary() {
       <p className="stat-label">КЛИЕНТОВ ВСЕГО</p>
       <p className="total-value">{formatInteger(report.totalClients)}</p>
       <div className="summary-divider" />
-      <Tooltip title="Потенциальная потеря выручки за следующие 30 дней">
-        <p className="stat-label">ПОД УГРОЗОЙ, 30Д</p>
+      <Tooltip title={report.lossExplanation}>
+        <p className="stat-label">ОЖИДАЕМЫЕ ПОТЕРИ</p>
       </Tooltip>
       <p className="revenue-value">{formatEuro(report.revenueAtRisk)}</p>
+      <p className="risk-summary__sub">нет оценки: {formatInteger(report.no_data)}</p>
+      <p className="risk-summary__sub">Пересчёт: {formatDateTime(report.recalculatedAt)}</p>
     </BentoCard>
   )
 }
@@ -28,7 +30,7 @@ export function RiskSummary({ level }: { level: 'high' | 'medium' | 'low' }) {
   const { pathname } = useLocation()
   const clientsPath = resolveClientsPath(pathname)
   const count = report[level]
-  const percent = count / report.totalClients * 100
+  const percent = report.totalClients ? count / report.totalClients * 100 : 0
   const isHigh = level === 'high'
   const title = { high: 'ВЫСОКИЙ РИСК', medium: 'СРЕДНИЙ РИСК', low: 'НИЗКИЙ РИСК' }[level]
   const color = {

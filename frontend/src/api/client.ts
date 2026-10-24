@@ -1,10 +1,15 @@
 import axios from 'axios'
 import type { AxiosError, AxiosRequestConfig, Method } from 'axios'
 import { message } from 'antd'
+import { formatApiError } from './error-message'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API_URL = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '')
 // Все роуты бэка, кроме /metrics, смонтированы под этим префиксом (backend/app/main.py)
 const API_PREFIX = '/api/v1'
+export const API_BASE_URL = `${API_URL}${API_PREFIX}`
+export const METRICS_URL = `${API_URL}/metrics`
+// Полный переход браузера (не XHR) — backend/app/routers/oidc.py редиректит на Authentik
+export const OIDC_LOGIN_URL = `${API_BASE_URL}/auth/oidc/login`
 
 export class ApiError extends Error {
   status: number
@@ -18,25 +23,14 @@ export class ApiError extends Error {
 type RetriableConfig = AxiosRequestConfig & { _retry?: boolean }
 
 export const http = axios.create({
-  baseURL: `${API_URL}${API_PREFIX}`,
+  baseURL: API_BASE_URL,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
 
-function extractMessage(data: unknown): string | null {
-  if (data && typeof data === 'object' && 'detail' in data) {
-    const detail = (data as { detail: unknown }).detail
-    if (typeof detail === 'string') return detail
-    if (Array.isArray(detail)) {
-      return detail.map((d) => (d as { msg?: string }).msg).filter(Boolean).join(', ')
-    }
-  }
-  return null
-}
-
 let refreshPromise: Promise<void> | null = null
 
-function refreshSession(): Promise<void> {
+export function refreshSession(): Promise<void> {
   refreshPromise ??= http.post('/auth/refresh').then(() => undefined).finally(() => {
     refreshPromise = null
   })
@@ -59,6 +53,13 @@ function isCurrentUserCheck(url: string | undefined): boolean {
   return !!url && /\/auth\/me(?:[/?]|$)/.test(url)
 }
 
+// Тихая фоновая проверка "доступен ли вход через OIDC" (рисовать ли кнопку
+// на LoginPage) — не действие пользователя, 404/5xx тут не должны всплывать
+// тостом (например, пока бэк со свежим /auth/oidc/* ещё не пересобран).
+function isOidcStatusCheck(url: string | undefined): boolean {
+  return !!url && /\/auth\/oidc\/status(?:[/?]|$)/.test(url)
+}
+
 http.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -74,24 +75,28 @@ http.interceptors.response.use(
 
     if (status === 401 && originalRequest && !originalRequest._retry && !isAuthAction(url)) {
       originalRequest._retry = true
-      let refreshed = true
       try {
         await refreshSession()
-      } catch {
-        refreshed = false
+      } catch (refreshError) {
+        if (refreshError instanceof ApiError && refreshError.status === 401) {
+          window.dispatchEvent(new Event('session-expired'))
+        }
+        // Сетевые ошибки, 429 и 5xx не подтверждают истечение сессии.
+        return Promise.reject(refreshError)
       }
       // Повторный запрос не оборачиваем в этот же try — если он упадёт по
       // другой причине (например 500), его ошибка должна дойти до вызывающего
       // кода как есть, а не быть подменена исходной 401-ошибкой ниже.
-      if (refreshed) return http(originalRequest)
-      // refresh тоже не удался — отдаём исходную ошибку ниже
+      return http(originalRequest)
     }
 
-    const apiMessage = extractMessage(error.response.data) ?? error.message ?? 'Request failed'
+    const apiMessage = formatApiError(status, error.response.data, url)
+    if (status === 401 && !isAuthAction(url)) window.dispatchEvent(new Event('session-expired'))
 
-    // Своя ошибка на форме логина (login/refresh/logout) и тихий статус
-    // "ещё не залогинен" (me) не дублируем глобальным тостом.
-    if (!isAuthAction(url) && !isCurrentUserCheck(url)) {
+    // Своя ошибка на форме логина (login/refresh/logout), тихий статус
+    // "ещё не залогинен" (me) и фоновая проверка доступности OIDC не
+    // дублируем глобальным тостом.
+    if (!isAuthAction(url) && !isCurrentUserCheck(url) && !isOidcStatusCheck(url)) {
       if (status >= 500) {
         message.error('Сервер временно недоступен. Попробуйте позже.')
       } else if (status !== 401) {
@@ -105,12 +110,13 @@ http.interceptors.response.use(
 
 export async function request<T>(
   path: string,
-  options: { method?: Method; data?: unknown } = {},
+  options: { method?: Method; data?: unknown; params?: Record<string, unknown> } = {},
 ): Promise<T> {
   const response = await http.request<T>({
     url: path,
     method: options.method ?? 'GET',
     data: options.data,
+    params: options.params,
   })
   return response.data
 }

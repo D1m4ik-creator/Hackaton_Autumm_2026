@@ -12,6 +12,7 @@ from app.db.schemas.auth import CurrentUser, UserLogin
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+@router.post("/login")
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str | None) -> None:
     """Ставит cookie с токенами; refresh=None — оставить в браузере текущий refresh"""
     settings = get_settings()
@@ -53,7 +54,7 @@ async def login(request: Request, db: SessionDep, user_data: UserLogin, response
 
     await login_guard.record_success(user_data.login)
     access_token, refresh_token = await crud_auth.start_session(db, user.login)
-    _set_auth_cookies(response, access_token, refresh_token)
+    crud_auth.set_auth_cookies(response, access_token, refresh_token)
     return {"message": "Успешная авторизация"}
 
 
@@ -61,7 +62,7 @@ async def login(request: Request, db: SessionDep, user_data: UserLogin, response
 @limiter.limit(refresh_limit)
 async def refresh(request: Request, db: SessionDep, response: Response):
     access_token, refresh_token = await crud_auth.rotate_session(db, request.cookies.get(REFRESH_COOKIE))
-    _set_auth_cookies(response, access_token, refresh_token)
+    crud_auth.set_auth_cookies(response, access_token, refresh_token)
     return {"status": "ok"}
 
 

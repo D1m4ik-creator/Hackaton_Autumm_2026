@@ -13,7 +13,8 @@ export default defineConfig({
     screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'npm.cmd run dev -- --port 5174',
+    command: 'node node_modules/vite/bin/vite.js --port 5174',
+    env: { VITE_API_URL: 'http://127.0.0.1:8000' },
     url: 'http://127.0.0.1:5174/dashboard',
     reuseExistingServer: false,
   },
