@@ -240,6 +240,62 @@ test('customers send both sort directions for every field, page, search and no_d
   await expect(page.getByText('Нет клиентов с выбранным уровнем риска')).toBeVisible()
 })
 
+test('client filters survive navigation between dashboard, settings and client details', async ({ page }) => {
+  await setupApi(page)
+  const queries: URLSearchParams[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/v1/customers') queries.push(url.searchParams)
+  })
+  await page.goto('/app/clients')
+  await page.getByRole('button', { name: 'Высокий', exact: true }).click()
+  await expect(page.locator('.client-table-link')).toHaveCount(9)
+  await page.getByRole('textbox', { name: 'Поиск клиентов' }).fill('client002')
+  await expect(page.locator('.client-table-link')).toHaveCount(1)
+  await page.getByRole('columnheader', { name: /^EMAIL/ }).click()
+  await expect(page.getByRole('columnheader', { name: /^EMAIL/ })).toHaveAttribute('aria-sort', 'ascending')
+
+  async function expectPreserved() {
+    await expect(page.getByRole('button', { name: 'Высокий', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('textbox', { name: 'Поиск клиентов' })).toHaveValue('client002')
+    await expect(page.locator('.client-table-link')).toHaveCount(1)
+    await expect(page.getByRole('columnheader', { name: /^EMAIL/ })).toHaveAttribute('aria-sort', 'ascending')
+    const query = queries.at(-1)!
+    expect(Object.fromEntries(query)).toMatchObject({ level: 'high', search: 'client002', sort: 'email', order: 'asc' })
+  }
+
+  await page.getByRole('link', { name: 'Дашборд', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Обзор рисков оттока' })).toBeVisible()
+  await page.getByRole('link', { name: 'Клиенты под риском', exact: true }).click()
+  await expectPreserved()
+  await page.getByRole('link', { name: 'Настройка модели', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Настройка модели', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: 'Клиенты под риском', exact: true }).click()
+  await expectPreserved()
+  await page.getByRole('link', { name: 'Открыть клиента client002@example.com', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Клиент #2', exact: true })).toBeVisible()
+  await page.getByRole('link', { name: '← Все клиенты под риском', exact: true }).click()
+  await expectPreserved()
+})
+
+test('dashboard risk card opens a filtered list without a StrictMode reset', async ({ page }) => {
+  await setupApi(page)
+  const levels: (string | null)[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/v1/customers') levels.push(url.searchParams.get('level'))
+  })
+  await page.goto('/')
+  await expect(page.getByRole('button', { name: /^Открыть клиента/ })).toHaveCount(4)
+  const start = levels.length
+  await page.getByRole('button', { name: /^ВЫСОКИЙ РИСК:/ }).click()
+  await expect(page).toHaveURL(/\/app\/clients$/)
+  await expect(page.getByRole('button', { name: 'Высокий', exact: true })).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.client-table-link')).toHaveCount(9)
+  expect(levels.slice(start).length).toBeGreaterThan(0)
+  expect(levels.slice(start).every((level) => level === 'high')).toBe(true)
+})
+
 test('customer card renders real reasons, transactions and prices and refreshes over SSE', async ({ page }) => {
   const api = await setupApi(page)
   await page.goto('/app/clients/1')
