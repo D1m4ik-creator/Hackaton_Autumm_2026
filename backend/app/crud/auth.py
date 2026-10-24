@@ -60,7 +60,7 @@ def _new_expires_at() -> datetime:
 
 
 def _admin_user() -> CurrentUser:
-    return CurrentUser(login=get_settings().admin.login, role="superadmin")
+    return CurrentUser(login=get_settings().admin.login, role="superadmin", uid="superadmin")
 
 
 async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUser | None:
@@ -76,7 +76,7 @@ async def authenticate(db: AsyncSession, login: str, password: str) -> CurrentUs
     if user.login == get_settings().admin.login:
         # Менеджер с логином админа не должен получить токен с sub админа
         return None
-    return CurrentUser(login=user.login, role=user.role, email=user.email)
+    return CurrentUser(login=user.login, role=user.role, email=user.email, uid=str(user.id))
 
 
 SUPERADMIN_UID = "superadmin"
@@ -133,18 +133,13 @@ def _issue_pair(login: str, uid: str, session_id: uuid.UUID) -> tuple[str, str]:
     return access_token, refresh_token
 
 
-async def _resolve_uid(db: AsyncSession, login: str) -> str:
-    """uid для токена: суперадмин (.env) -> 'superadmin', менеджер/админ -> str(user.id)"""
-    if login == get_settings().admin.login:
-        return SUPERADMIN_UID
-    user = await UsersDAO.find_one_or_none(db, login=login)
-    return str(user.id) if user else SUPERADMIN_UID
+async def start_session(db: AsyncSession, login: str, uid: str) -> tuple[str, str]:
+    """Создаёт сессию входа и возвращает пару токенов (access, refresh).
 
-
-async def start_session(db: AsyncSession, login: str) -> tuple[str, str]:
-    """Создаёт сессию входа и возвращает пару токенов (access, refresh)"""
+    uid берётся из того аккаунта, чей пароль (или email в OIDC) проверили, а не ищется заново по логину:
+    иначе между проверкой и выдачей токена логин могут удалить и пересоздать, и токен уйдёт новому аккаунту.
+    """
     await SessionsDAO.delete_expired(db)
-    uid = await _resolve_uid(db, login)
     session_id = uuid.uuid4()
     access_token, refresh_token = _issue_pair(login, uid, session_id)
     expires_at = _new_expires_at()
@@ -177,8 +172,9 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> tuple[s
     login = payload.get("sub", "")
     uid = payload.get("uid")
     if not await find_user(login, uid):
-        # Менеджера удалили (или заново создали с тем же логином — uid не совпадёт): сессии закрываются
-        await SessionsDAO.delete_by_login(db, login)
+        # Менеджера удалили (или заново создали с тем же логином — uid не совпадёт): закрываем только эту сессию,
+        # сессии по логину могут уже принадлежать новому владельцу
+        await SessionsDAO.delete_by_id(db, session_id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token не действителен")
 
     access_token, new_refresh_token = _issue_pair(login, uid or SUPERADMIN_UID, session_id)

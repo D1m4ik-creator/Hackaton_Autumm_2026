@@ -1,11 +1,13 @@
 from typing import Any
 
 from fastapi import HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.analysis as analysis
 import app.crud.recalc as recalc
 from app.dao.model_settings import ModelSettingsDAO
+from app.db.models.model_settings import ModelSettings
 from app.db.schemas.model_settings import ModelSettingsOut, ModelSettingsPatchOut
 
 
@@ -52,16 +54,19 @@ async def _save_and_recalculate(session: AsyncSession, settings: dict, removed: 
     stored = {**settings, recalc.REMOVED_KEY: removed} if removed else settings
     await ModelSettingsDAO.save(session, stored)
     summary = await recalc.recalculate(session, "settings")
-    await session.commit()
 
-    row = await ModelSettingsDAO.find_by_id(session, 1)
-    return ModelSettingsPatchOut(
+    # Ответ собирается до commit, пока держим advisory-lock: иначе параллельный PATCH успеет
+    # подменить настройки и ответ смешает чужие настройки с нашей version
+    updated_at = (await session.execute(select(ModelSettings.updated_at).where(ModelSettings.id == 1))).scalar_one()
+    out = ModelSettingsPatchOut(
         settings=await recalc.effective_settings(session),
         defaults=analysis.default_settings(),
-        updated_at=row.updated_at,
+        updated_at=updated_at,
         version=summary.version,
         recalculated_at=summary.recalculated_at,
     )
+    await session.commit()
+    return out
 
 
 async def delete_setting(session: AsyncSession, section: str, key: str) -> ModelSettingsPatchOut:

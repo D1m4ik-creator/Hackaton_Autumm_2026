@@ -73,10 +73,14 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
     if not values:
         return user
     await _check_unique(db, values.get("login"), values.get("email"), user.id)
-    old_login = user.login
     if "password" in values:
         values["password_hash"] = await asyncio.to_thread(get_password_hash, values.pop("password"))
     try:
+        # Логин перечитывается под блокировкой строки после хэширования: параллельное переименование
+        # либо уже закоммичено (увидим новый логин), либо ждёт нас — сессии закроются у актуального логина
+        old_login = await UsersDAO.lock_login(db, user.id)
+        if old_login is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
         await UsersDAO.update_by_id_no_commit(db, user.id, **values)
         if "login" in values or "password_hash" in values:
             # Смена логина или пароля закрывает старые сессии менеджера в той же транзакции
@@ -85,6 +89,9 @@ async def update_user(db: AsyncSession, user_id: uuid.UUID, data: UserUpdate, ac
     except IntegrityError:
         await db.rollback()
         raise _conflict("Логин или почта уже заняты")
+    except HTTPException:
+        await db.rollback()
+        raise
     await db.refresh(user)
     return user
 

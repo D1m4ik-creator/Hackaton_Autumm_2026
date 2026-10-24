@@ -30,7 +30,7 @@ async def login(request: Request, db: SessionDep, user_data: UserLogin, response
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный логин или пароль")
 
     await login_guard.record_success(user_data.login)
-    access_token, refresh_token = await crud_auth.start_session(db, user.login)
+    access_token, refresh_token = await crud_auth.start_session(db, user.login, user.uid)
     crud_auth.set_auth_cookies(response, access_token, refresh_token)
     return {"message": "Успешная авторизация"}
 

@@ -48,11 +48,14 @@ async def callback(request: Request, db: SessionDep):
 
     userinfo = token.get("userinfo") or {}
     email = (userinfo.get("email") or "").strip().lower()
-    user = await UsersDAO.find_by_login_or_email(db, email) if email else None
+    # Неподтверждённую почту IdP может разрешить вписать любую — по ней аккаунты не связываем
+    if userinfo.get("email_verified") is not True:
+        email = ""
+    user = await UsersDAO.find_one_or_none(db, email=email) if email else None
     if not user or user.role not in ("admin", "manager"):
         return RedirectResponse(f"{settings.frontend_url}/login?error=oidc_no_account", status_code=status.HTTP_302_FOUND)
 
-    access_token, refresh_token = await crud_auth.start_session(db, user.login)
+    access_token, refresh_token = await crud_auth.start_session(db, user.login, str(user.id))
     redirect = RedirectResponse(settings.frontend_url, status_code=status.HTTP_302_FOUND)
     crud_auth.set_auth_cookies(redirect, access_token, refresh_token)
     return redirect
