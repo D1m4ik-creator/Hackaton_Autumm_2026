@@ -70,6 +70,11 @@ class Config(BaseSettings):
     rate_limit_login: str = "5/minute"
     rate_limit_refresh: str = "30/minute"
 
+    # Защита от подбора пароля по конкретному логину (в дополнение к лимиту по IP).
+    # Отключается вместе с rate_limit_enabled.
+    login_max_failures: int = 5
+    login_failure_window_seconds: int = 900
+
     # Единственная учётная запись для входа в панель
     admin_login: str
     admin_password: SecretStr = Field(min_length=8)
