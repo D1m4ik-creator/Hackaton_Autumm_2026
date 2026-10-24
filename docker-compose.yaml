@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:17
+    # Логин, пароль и имя базы берутся из того же файла, что и у api, чтобы они не расходились
+    env_file:
+      - ./backend/.env
+    ports:
+      # 5433 на хосте, чтобы не конфликтовать с локальным PostgreSQL; наружу не публикуется
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # Схему создаёт Alembic при старте api, данные грузит само приложение из origin_data
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      # Внутри сети compose база доступна по имени сервиса
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      # Исходный снимок (10 аккаунтов, 30 услуг, 100 транзакций): при старте грузится в пустую базу
+      SOURCE_DATA_PATH: /data/data.json
+    volumes:
+      - ./origin_data:/data:ro
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Адрес API подставляется в сборку фронта на этапе build
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  pgdata:

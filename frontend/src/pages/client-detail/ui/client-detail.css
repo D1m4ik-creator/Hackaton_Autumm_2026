@@ -1,0 +1,74 @@
+.client-detail-page {
+  --detail-profile-bg: #fff;
+  --detail-profile-border: #ff7a00;
+  --detail-profile-border-width: 2px;
+  --detail-profile-padding: 34px 26px 32px;
+  --detail-muted: #7a7875;
+  --detail-secondary: #a8a5a1;
+  --detail-profile-status-bg: #e4e2df;
+  --detail-profile-status-text: #121110;
+  --detail-progress-track: #e4e2df;
+  --detail-progress-muted: #55534f;
+  --detail-progress-subtle: #a8a5a1;
+  --detail-activity-bg: #fff;
+  --detail-activity-border: #e4e2df;
+  --detail-activity-title: #121110;
+  --detail-activity-dot: #a8a5a1;
+  --detail-activity-line: #e4e2df;
+  --detail-wait-bg: #121110;
+  --detail-wait-text: #fafafa;
+  --detail-active-bg: #e4e2df;
+  --detail-active-text: #121110;
+}
+
+:root[data-theme='dark'] .client-detail-page {
+  --dashboard-bg: #191816;
+  --dashboard-surface: #211f1c;
+  --dashboard-border: rgb(255 255 255 / 8%);
+  --detail-profile-bg: #111;
+  --detail-profile-border: rgb(255 255 255 / 8%);
+  --detail-profile-border-width: 1px;
+  --detail-profile-padding: 35px 27px 33px;
+  --detail-muted: #a8a5a1;
+  --detail-profile-status-bg: rgb(255 255 255 / 6%);
+  --detail-profile-status-text: #bfbfc7;
+  --detail-progress-track: rgb(255 255 255 / 12%);
+  --detail-progress-muted: #8c8880;
+  --detail-progress-subtle: #c9c6c1;
+  --detail-activity-bg: #281b0c;
+  --detail-activity-border: rgb(255 122 0 / 35%);
+  --detail-activity-title: #ff7a00;
+  --detail-activity-dot: rgb(255 122 0 / 35%);
+  --detail-activity-line: rgb(255 122 0 / 15%);
+  --detail-wait-bg: rgb(255 122 0 / 16%);
+  --detail-wait-text: #ff7a00;
+  --detail-active-bg: rgb(255 255 255 / 8%);
+  --detail-active-text: #bfbfc7;
+}
+
+.client-detail-page .dashboard-main { padding-right: 48px; }
+.client-detail-toolbar { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.client-detail-toolbar .theme-toggle { position: absolute; top: -10px; right: 0; }
+.client-detail-back { display: block; width: fit-content; color: var(--detail-muted); font-size: 13px; font-weight: 600; line-height: 16px; text-decoration: none; }
+.client-detail-back:hover { color: var(--dashboard-text); }
+.client-detail-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 32px 24px; align-items: start; }
+.client-detail-card { min-width: 0; padding: 23px; border: 1px solid var(--dashboard-border); border-radius: 14px; background: var(--dashboard-surface); color: var(--dashboard-text); }
+.client-detail-card h2 { color: var(--dashboard-text); font-size: 16px; font-weight: 700; line-height: 19px; }
+
+@media (max-width: 1279px) { .client-detail-page .dashboard-main { padding-right: 32px; } }
+@media (max-width: 1199px) {
+  .client-detail-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .client-detail-card { min-height: auto; }
+  .client-detail-grid .client-risk-reasons { min-height: 480px; }
+}
+@media (max-width: 959px) { .client-detail-page .dashboard-main { padding-right: 24px; } }
+@media (max-width: 767px) {
+  .client-detail-page .dashboard-main { padding-right: 20px; }
+  .client-detail-toolbar { flex-wrap: wrap; }
+  .client-detail-toolbar .theme-toggle { position: static; }
+}
+@media (max-width: 439px) {
+  .client-detail-page .dashboard-main { padding-right: 12px; }
+  .client-detail-grid { gap: 20px; }
+  .client-detail-card { padding: 20px; }
+}

@@ -1,0 +1,7 @@
+export { mockClients, mockPriorityClients } from './api/mock-clients'
+export { riskLabels } from './model/types'
+export type { Client, RiskLevel } from './model/types'
+export { RiskBadge } from './ui/RiskBadge'
+export { ClientRiskIndicator } from './ui/ClientRiskIndicator'
+export { getMockClientDetail } from './api/mock-client-detail'
+export type { ClientDetail, ClientRiskReason, ClientActivity, ClientService, ClientServiceStatus } from './model/detail-types'

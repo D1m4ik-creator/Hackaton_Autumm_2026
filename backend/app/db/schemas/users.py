@@ -1,41 +1,39 @@
-import re
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import EmailStr, Field, field_validator
+
+from .auth import Role
+from .common import CamelModel
+
+LOGIN_PATTERN = r"^[A-Za-z0-9_.-]+$"
 
 
-PASSWORD_RE = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\w\s]).{8,64}$")
-
-
-class User(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    name: str
+class UserCreate(CamelModel):
+    login: str = Field(min_length=3, max_length=50, pattern=LOGIN_PATTERN)
     email: EmailStr
-    created_at: datetime
+    password: str = Field(min_length=8, max_length=128)
 
-
-class UserCreate(BaseModel):
-    name: str = Field(min_length=2, max_length=50)
-    email: EmailStr
-    password: str
-
-    @field_validator("password")
+    @field_validator("email")
     @classmethod
-    def validate_password(cls, value):
-        if not PASSWORD_RE.match(value):
-            raise ValueError("Пароль должен быть от 8 до 64 символов и содержать хотя бы одну заглавную букву, одну строчную букву, одну цифру и один специальный символ.")
-        return value
+    def lower_email(cls, value: str) -> str:
+        return value.lower()
 
 
-class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+class UserUpdate(CamelModel):
+    login: str | None = Field(default=None, min_length=3, max_length=50, pattern=LOGIN_PATTERN)
+    email: EmailStr | None = None
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def lower_email(cls, value: str | None) -> str | None:
+        return value.lower() if value else value
 
 
-class UserOut(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class UserOut(CamelModel):
     id: uuid.UUID
-    email: EmailStr
+    login: str
+    email: str
+    role: Role
+    created_at: datetime

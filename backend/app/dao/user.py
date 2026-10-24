@@ -1,5 +1,4 @@
-import uuid
-
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .base import BaseDAO
@@ -10,6 +9,12 @@ class UsersDAO(BaseDAO):
     model = User
 
     @classmethod
-    async def set_refresh_token_hash(cls, session: AsyncSession, user_id: uuid.UUID, token_hash: str | None):
-        """Сохраняет хэш актуального refresh токена (None, чтобы сбросить)"""
-        await cls.update_by_id(session, user_id, refresh_token_hash=token_hash)
+    async def find_by_login_or_email(cls, session: AsyncSession, value: str) -> User | None:
+        """Пользователь по логину или почте (почта хранится в нижнем регистре)"""
+        result = await session.execute(select(User).where(or_(User.login == value, User.email == value.lower())))
+        return result.scalars().first()
+
+    @classmethod
+    async def list_all(cls, session: AsyncSession) -> list[User]:
+        result = await session.execute(select(User).order_by(User.created_at, User.login))
+        return list(result.scalars().all())

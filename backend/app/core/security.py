@@ -1,4 +1,5 @@
 import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
@@ -9,12 +10,22 @@ from pwdlib import PasswordHash
 from .config import get_settings
 
 password_hash = PasswordHash.recommended()
+# Хэш-пустышка: вход несуществующего пользователя занимает столько же времени, сколько обычный
+DUMMY_HASH = password_hash.hash("dummy-password-for-timing")
 
 ACCESS_COOKIE = "users_access_token"
 REFRESH_COOKIE = "users_refresh_token"
 
 ACCESS_TOKEN_TYPE = "access"
 REFRESH_TOKEN_TYPE = "refresh"
+
+
+def verify_credentials(login: str, password: str) -> bool:
+    """Сверяет логин и пароль с учётной записью из .env (сравнение за постоянное время)"""
+    admin = get_settings().admin
+    login_ok = secrets.compare_digest(login.encode(), admin.login.encode())
+    password_ok = secrets.compare_digest(password.encode(), admin.password.get_secret_value().encode())
+    return login_ok and password_ok
 
 
 def get_password_hash(password: str) -> str:
@@ -99,12 +110,12 @@ def refresh_decode_token(token: str | None) -> dict:
     )
 
 
-def get_user_id(payload: dict) -> uuid.UUID:
-    """Достаёт id пользователя из payload токена, если его нет или он битый, то вызывает HTTPException с кодом 401"""
+def get_session_id(payload: dict) -> uuid.UUID:
+    """Достаёт id сессии из payload refresh токена, если его нет или он битый, то вызывает HTTPException с кодом 401"""
     try:
-        return uuid.UUID(payload.get("sub", ""))
+        return uuid.UUID(payload.get("sid", ""))
     except (ValueError, TypeError, AttributeError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Не найден ID пользователя")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token не валидный")
 
 
 def get_token(request: Request) -> str:
