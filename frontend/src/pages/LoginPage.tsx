@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
+import { EyeInvisibleOutlined, EyeOutlined } from '@ant-design/icons'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { ApiError, OIDC_LOGIN_URL } from '../api/client'
@@ -10,6 +11,7 @@ import { AuthLayout } from '../components/AuthLayout'
 const OIDC_ERROR_MESSAGES: Record<string, string> = {
   oidc_failed: 'Не удалось войти через Authentik. Попробуйте ещё раз.',
   oidc_no_account: 'Для этого аккаунта нет доступа в панели — обратитесь к администратору.',
+  oidc_unavailable: 'Authentik сейчас недоступен. Попробуйте через минуту или войдите по логину и паролю.',
 }
 
 export function LoginPage() {
@@ -20,6 +22,7 @@ export function LoginPage() {
   const { data: oidcStatus } = useApiResource(getOidcStatus)
   const [loginValue, setLoginValue] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(oidcError ? (OIDC_ERROR_MESSAGES[oidcError] ?? null) : null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isOidcRedirecting, setIsOidcRedirecting] = useState(false)
@@ -65,14 +68,27 @@ export function LoginPage() {
         </div>
         <div className="auth-field">
           <label htmlFor="password">Пароль</label>
-          <input
-            id="password"
-            type="password"
-            placeholder="Пароль *"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
+          <div className="auth-password">
+            <input
+              id="password"
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Пароль *"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+            <button
+              type="button"
+              className="auth-password__toggle"
+              onClick={() => setShowPassword((visible) => !visible)}
+              aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showPassword}
+              title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+            >
+              {showPassword ? <EyeInvisibleOutlined /> : <EyeOutlined />}
+            </button>
+          </div>
         </div>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button type="submit" className="auth-submit" disabled={isSubmitting}>

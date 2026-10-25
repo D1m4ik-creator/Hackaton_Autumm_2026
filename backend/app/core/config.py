@@ -101,6 +101,17 @@ class Config(BaseSettings):
     # браузера), token/jwks по-прежнему берутся из OIDC_ISSUER для бэкенда.
     # Пусто — используется адрес из самого OIDC_ISSUER.
     oidc_authorize_url: str = ""
+    # Синхронизация пользователей панели в Authentik (app/core/authentik_api.py):
+    # создание/смена логина, почты, пароля/удаление в панели повторяются в Authentik,
+    # чтобы тот же логин и пароль работали на его экране входа. Пусто — выключено.
+    # Адрес API Authentik для бэкенда, например http://authentik-server:9000
+    authentik_api_url: str = ""
+    # API-токен пользователя Authentik с правами на управление пользователями
+    authentik_api_token: SecretStr = SecretStr("")
+
+    @property
+    def authentik_sync_enabled(self) -> bool:
+        return bool(self.authentik_api_url and self.authentik_api_token.get_secret_value())
 
     @model_validator(mode="after")
     def check_secrets(self) -> "Config":

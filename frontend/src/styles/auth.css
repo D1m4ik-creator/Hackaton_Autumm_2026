@@ -217,6 +217,42 @@ body {
   transition: background-color 9999s ease-in-out 0s, color 9999s ease-in-out 0s;
 }
 
+/* Поле пароля с кнопкой-глазиком внутри справа */
+.auth-password {
+  position: relative;
+}
+
+.auth-password input {
+  padding-right: 2.9rem;
+}
+
+.auth-password__toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  font-size: 1.05rem;
+  color: var(--gray-500);
+  background: transparent;
+  border: none;
+  border-radius: 0.4rem;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.auth-password__toggle:hover,
+.auth-password__toggle:focus-visible {
+  color: var(--gray-800);
+  background: var(--gray-200);
+  outline: none;
+}
+
 .auth-field__hint {
   margin: 0.4rem 0 0;
   font-size: 0.8rem;

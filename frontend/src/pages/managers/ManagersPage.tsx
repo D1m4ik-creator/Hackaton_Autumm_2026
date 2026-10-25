@@ -1,11 +1,13 @@
 import { Alert, App, Button, Form, Input, Modal, Popconfirm, Select, Space, Table } from 'antd'
 import type { TableColumnsType } from 'antd'
+import { ThunderboltOutlined } from '@ant-design/icons'
 import { useState } from 'react'
 import { createManager, deleteManager, getManagers, updateManager } from '../../api/users'
 import type { Manager, ManagerInput } from '../../api/users'
 import { useApiResource } from '../../api/useApiResource'
 import { useAuth } from '../../context/AuthContext'
 import { formatDateTime } from '../../shared/lib/format'
+import { generatePassword } from '../../shared/lib/password'
 import { isSuperadmin } from '../../shared/lib/roles'
 import { DashboardShell } from '../../widgets/dashboard-shell'
 import './managers.css'
@@ -26,6 +28,7 @@ export function ManagersPage({ onSignOut }: { onSignOut?: () => Promise<void> })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [passwordVisible, setPasswordVisible] = useState(false)
 
   const pageTitle = canManageAdmins ? 'Управление пользователями' : 'Управление менеджерами'
   const addLabel = canManageAdmins ? 'Добавить пользователя' : 'Добавить менеджера'
@@ -33,6 +36,7 @@ export function ManagersPage({ onSignOut }: { onSignOut?: () => Promise<void> })
   function showEditor(manager: Manager | null) {
     setEditing(manager)
     setSaveError(null)
+    setPasswordVisible(false)
     form.resetFields()
     form.setFieldsValue({ login: manager?.login ?? '', email: manager?.email ?? '', password: '', role: manager?.role ?? 'manager' })
     setOpen(true)
@@ -59,6 +63,20 @@ export function ManagersPage({ onSignOut }: { onSignOut?: () => Promise<void> })
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : 'Не удалось сохранить пользователя')
     } finally { setSaving(false) }
+  }
+
+  // Генерирует пароль, показывает его в поле и копирует в буфер — чтобы сразу передать пользователю
+  async function fillGeneratedPassword() {
+    const password = generatePassword()
+    form.setFieldValue('password', password)
+    await form.validateFields(['password']).catch(() => undefined)
+    setPasswordVisible(true)
+    try {
+      await navigator.clipboard.writeText(password)
+      message.success('Пароль сгенерирован и скопирован в буфер обмена')
+    } catch {
+      message.info('Пароль сгенерирован — скопируйте его из поля')
+    }
   }
 
   async function remove(manager: Manager) {
@@ -95,7 +113,14 @@ export function ManagersPage({ onSignOut }: { onSignOut?: () => Promise<void> })
         {!editing && canManageAdmins && <Form.Item name="role" label="Роль" initialValue="manager" rules={[{ required: true, message: 'Выберите роль' }]}>
           <Select options={[{ value: 'manager', label: roleLabels.manager }, { value: 'admin', label: roleLabels.admin }]} />
         </Form.Item>}
-        <Form.Item name="password" label={editing ? 'Новый пароль (необязательно)' : 'Пароль'} rules={[{ required: !editing, message: 'Укажите пароль' }, { min: 8, max: 128, message: 'От 8 до 128 символов' }]}><Input.Password autoComplete="new-password" maxLength={128} /></Form.Item>
+        <Form.Item label={editing ? 'Новый пароль (необязательно)' : 'Пароль'} required={!editing}>
+          <Space.Compact block>
+            <Form.Item name="password" noStyle rules={[{ required: !editing, message: 'Укажите пароль' }, { min: 8, max: 128, message: 'От 8 до 128 символов' }]}>
+              <Input.Password autoComplete="new-password" maxLength={128} visibilityToggle={{ visible: passwordVisible, onVisibleChange: setPasswordVisible }} />
+            </Form.Item>
+            <Button icon={<ThunderboltOutlined />} onClick={() => void fillGeneratedPassword()}>Сгенерировать</Button>
+          </Space.Compact>
+        </Form.Item>
         {saveError && <Alert type="error" title={saveError} role="alert" />}
       </Form>
     </Modal>
