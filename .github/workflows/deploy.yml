@@ -2,7 +2,7 @@ name: Deploy
 
 on:
   push:
-    branches: [main]   # деплой только из main
+    branches: [deploy]   # деплой только из deploy
 
 jobs:
   deploy:
@@ -18,7 +18,9 @@ jobs:
           script: |
             set -e
             cd /opt/hackathon
-            git pull origin main
+            git fetch origin
+            git checkout deploy
+            git pull origin deploy
             docker compose up -d --build
             docker compose ps
             # Проверяем, что API отвечает
