@@ -877,17 +877,151 @@
           "source"
         ],
         "summary": "Put Snapshot",
-        "description": "Полная замена исходных данных и пересчёт в одной транзакции",
+        "description": "Загрузка исходных данных и пересчёт в одной транзакции (замена или добавление)",
         "operationId": "put_snapshot_api_v1_source_snapshot_put",
+        "parameters": [
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "replace",
+                "merge"
+              ],
+              "type": "string",
+              "description": "replace — полная замена данных (по умолчанию); merge — добавить к существующим, при пересечении id/email — 422, старые данные не трогаются",
+              "default": "replace",
+              "title": "Mode"
+            },
+            "description": "replace — полная замена данных (по умолчанию); merge — добавить к существующим, при пересечении id/email — 422, старые данные не трогаются"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SnapshotIn"
               }
             }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotLoadResult"
+                }
+              }
+            }
           },
-          "required": true
+          "401": {
+            "description": "Не аутентифицирован (нет или истёк токен)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Недостаточно прав для действия",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Тело запроса превышает допустимый размер",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Сервис временно недоступен (идёт пересчёт данных)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/source/snapshot/file": {
+      "put": {
+        "tags": [
+          "source"
+        ],
+        "summary": "Put Snapshot File",
+        "description": "Загрузка файла снимка из JSON, CSV или Excel с теми же проверками и пересчётом.",
+        "operationId": "put_snapshot_file_api_v1_source_snapshot_file_put",
+        "parameters": [
+          {
+            "name": "format",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "json",
+                "csv",
+                "xlsx"
+              ],
+              "type": "string",
+              "description": "Формат файла снимка: json, csv или xlsx",
+              "title": "Format"
+            },
+            "description": "Формат файла снимка: json, csv или xlsx"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "replace",
+                "merge"
+              ],
+              "type": "string",
+              "default": "replace",
+              "title": "Mode"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "contentMediaType": "application/octet-stream",
+                "title": "Content"
+              }
+            }
+          }
         },
         "responses": {
           "200": {
@@ -2036,6 +2170,15 @@
             "type": "string",
             "format": "date-time",
             "title": "Recalculatedat"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "replace",
+              "merge"
+            ],
+            "title": "Mode",
+            "default": "replace"
           }
         },
         "type": "object",
