@@ -1,16 +1,26 @@
 import csv
 import io
 import json
+from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from typing import Literal
 
+from fastapi import HTTPException
 from openpyxl import Workbook
+from openpyxl.cell import WriteOnlyCell
 from openpyxl.utils import get_column_letter
 from sqlalchemy import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.dao.customer_query as customer_query
+from app.crud.snapshot_files import CSV_SNAPSHOT_HEADERS, SNAPSHOT_MODELS
+from app.db.schemas.source import (
+    SnapshotAccountIn,
+    SnapshotIn,
+    SnapshotServiceIn,
+    SnapshotTransactionIn,
+)
 
 ExportFormat = Literal["csv", "xlsx", "json"]
 
@@ -82,16 +92,35 @@ def _json_row(row: Row) -> dict:
     }
 
 
-def _to_csv(rows: Sequence[Row]) -> bytes:
+def _to_csv(rows: Sequence[Row], snapshot: SnapshotIn) -> bytes:
     buffer = io.StringIO()
     # «;» и BOM — чтобы Excel с русской локалью открыл файл двойным кликом без мастера импорта
     writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(HEADERS)
-    writer.writerows(_table_row(row) for row in rows)
+    writer.writerow(HEADERS + CSV_SNAPSHOT_HEADERS)
+    data = snapshot.model_dump(mode="json")
+    accounts = {account["id"]: account for account in data["accounts"]}
+    services = defaultdict(list)
+    transactions = defaultdict(list)
+    owners = {}
+    for service in data["services"]:
+        services[service["ownerId"]].append(service)
+        owners[service["id"]] = service["ownerId"]
+    for transaction in data["transactions"]:
+        transactions[owners[transaction["serviceId"]]].append(transaction)
+    for row in rows:
+        source = [accounts[row.id], services[row.id], transactions[row.id]]
+        writer.writerow(_table_row(row) + [json.dumps(value, ensure_ascii=False) for value in source])
     return ("﻿" + buffer.getvalue()).encode("utf-8")
 
 
-def _to_xlsx(rows: Sequence[Row]) -> bytes:
+def _to_xlsx(rows: Sequence[Row], snapshot: SnapshotIn) -> bytes:
+    for name in SNAPSHOT_MODELS:
+        for record in getattr(snapshot, name):
+            if any(isinstance(value, str) and len(value) > 32767 for value in record.model_dump().values()):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Текст не помещается в ячейку Excel. Используйте CSV или JSON.",
+                )
     workbook = Workbook(write_only=True)
     sheet = workbook.create_sheet("Клиенты")
     widths = [12, 32, 14, 9, 18, 12, 12, 12, 12, 16, 48]
@@ -101,13 +130,33 @@ def _to_xlsx(rows: Sequence[Row]) -> bytes:
     sheet.append(HEADERS)
     for row in rows:
         sheet.append(_table_row(row))
+    # Отдельные листы сохраняют исходные поля и единицы (центы).
+    for name, model in SNAPSHOT_MODELS.items():
+        source_sheet = workbook.create_sheet(name)
+        headers = [field.alias for field in model.model_fields.values()]
+        source_sheet.freeze_panes = "A2"
+        source_sheet.append(headers)
+        for record in getattr(snapshot, name):
+            values = record.model_dump(mode="json")
+            cells = []
+            for key in headers:
+                value = values[key]
+                # Excel округляет большие целые: сохраняем их текстом.
+                if isinstance(value, int) and abs(value) >= 10**15:
+                    value = str(value)
+                cell = WriteOnlyCell(source_sheet, value=value)
+                if isinstance(value, str):
+                    cell.data_type = "s"
+                cells.append(cell)
+            source_sheet.append(cells)
     buffer = io.BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
 
 
-def _to_json(rows: Sequence[Row]) -> bytes:
+def _to_json(rows: Sequence[Row], snapshot: SnapshotIn) -> bytes:
     payload = {"exportedAt": datetime.now(timezone.utc).isoformat(), "items": [_json_row(row) for row in rows]}
+    payload.update(snapshot.model_dump(mode="json"))
     return json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
 
 
@@ -125,5 +174,11 @@ async def export_customers(
 ) -> tuple[bytes, str]:
     """Файл выгрузки клиентов под теми же фильтром и сортировкой, что таблица; возвращает (тело, имя файла)"""
     rows = await customer_query.export_customers(session, levels=levels, search=search, sort=sort, order=order)
+    services, transactions = await customer_query.export_customer_sources(session, levels=levels, search=search)
+    snapshot = SnapshotIn(
+        accounts=[SnapshotAccountIn.model_validate(row) for row in rows],
+        services=[SnapshotServiceIn.model_validate(service) for service in services],
+        transactions=[SnapshotTransactionIn.model_validate(transaction) for transaction in transactions],
+    )
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M")
-    return _WRITERS[fmt](rows), f"customers_{stamp}.{fmt}"
+    return _WRITERS[fmt](rows, snapshot), f"customers_{stamp}.{fmt}"
