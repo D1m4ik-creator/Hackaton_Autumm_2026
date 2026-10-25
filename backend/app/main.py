@@ -126,6 +126,8 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Имя файла выгрузки (GET /customers/export) фронт берёт из этого заголовка
+    expose_headers=["Content-Disposition"],
 )
 
 # Нужен authlib (routers/oidc.py) — между редиректом на Authentik и колбэком

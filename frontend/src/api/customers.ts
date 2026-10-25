@@ -1,4 +1,4 @@
-import { request } from './client'
+import { http, request } from './client'
 import type { Client, ClientDetail, ClientRiskReason, RiskLevel } from '../entities/client'
 import { formatShortDate } from '../shared/lib/format'
 
@@ -140,4 +140,19 @@ export async function getCustomer(id: string): Promise<ClientDetail> {
     transactions: result.transactions, calculatedAt: result.calculatedAt, asOf: result.asOf,
     withdrawBalanceCents: result.withdrawBalance, bonusBalanceCents: result.bonusBalance,
   }
+}
+
+export type CustomerExportFormat = 'csv' | 'xlsx' | 'json'
+
+// Файл целиком через http (а не ссылкой), чтобы сработал refresh истёкшего access-токена
+export async function exportCustomers(format: CustomerExportFormat, query: Omit<CustomerQuery, 'page' | 'pageSize'> = {}) {
+  const response = await http.get<Blob>('/customers/export', { params: { ...query, format }, responseType: 'blob' })
+  const disposition = String(response.headers['content-disposition'] ?? '')
+  const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `customers.${format}`
+  const url = URL.createObjectURL(response.data)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
 }

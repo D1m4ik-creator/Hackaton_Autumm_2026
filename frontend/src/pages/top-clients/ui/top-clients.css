@@ -1,5 +1,7 @@
 .top-clients-page .dashboard-main { padding-right: 48px; }
-.top-clients-heading { margin-bottom: 30px; }
+.top-clients-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 30px; }
+.top-clients-heading .export-clients-button.ant-btn { height: 36px; padding: 0 18px; border: 1px solid var(--dashboard-accent-bright); border-radius: 999px; background: var(--dashboard-surface); color: var(--dashboard-accent-bright); font-size: 13px; box-shadow: none; }
+.top-clients-heading .export-clients-button.ant-btn:hover { background: var(--dashboard-hover) !important; color: var(--dashboard-accent-bright) !important; border-color: var(--dashboard-accent-bright) !important; }
 .top-clients-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
 .top-clients-heading p { margin-top: 5px; color: var(--dashboard-muted); font-size: 13px; line-height: 16px; }
 .top-clients-page .client-risk-filters { margin-bottom: 20px; }
