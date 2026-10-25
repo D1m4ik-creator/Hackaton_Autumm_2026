@@ -9,6 +9,8 @@ COPY . .
 
 ARG VITE_API_URL=http://localhost:8000
 ENV VITE_API_URL=$VITE_API_URL
+ARG VITE_GRAFANA_URL=http://localhost:3001
+ENV VITE_GRAFANA_URL=$VITE_GRAFANA_URL
 
 RUN npm run build
 

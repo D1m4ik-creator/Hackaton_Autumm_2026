@@ -12,6 +12,7 @@ import { ModelSettingsPage } from '../pages/model-settings'
 import { LoginPage } from '../pages/LoginPage'
 import { ManagersPage } from '../pages/managers/ManagersPage'
 import { ChurnTrendPage } from '../pages/churn-trend'
+import { GrafanaPage } from '../pages/grafana'
 import { subscribeToEvents, useEventsStore } from '../api/events'
 import { useRiskReportStore } from '../entities/risk-report'
 
@@ -117,6 +118,11 @@ function AuthenticatedChurnTrend() {
   return <ChurnTrendPage onSignOut={logout} />
 }
 
+function AuthenticatedGrafana() {
+  const { logout } = useAuth()
+  return <GrafanaPage onSignOut={logout} />
+}
+
 export default function App() {
   return (
     <Routes>
@@ -134,6 +140,7 @@ export default function App() {
           <Route path="/app/model-settings" element={<ProtectedRoute><AuthenticatedModelSettings /></ProtectedRoute>} />
           <Route path="/app/users" element={<ProtectedRoute adminOnly><AuthenticatedManagers /></ProtectedRoute>} />
           <Route path="/app/churn-trend" element={<ProtectedRoute><AuthenticatedChurnTrend /></ProtectedRoute>} />
+          <Route path="/app/grafana" element={<ProtectedRoute><AuthenticatedGrafana /></ProtectedRoute>} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
