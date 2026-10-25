@@ -11,8 +11,10 @@ const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 const API_PREFIX = '/api/v1'
 export const API_BASE_URL = `${API_URL}${API_PREFIX}`
 export const METRICS_URL = `${API_URL}/metrics`
-// Grafana — отдельный сервис (ops/README.md), не проксируется через API
-export const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? `${window.location.protocol}//${window.location.hostname}:3001`).replace(/\/$/, '')
+// Grafana — отдельный сервис (ops/README.md). По умолчанию same-origin подпуть
+// /grafana (nginx проксирует на сервис grafana, frontend/nginx.conf); для
+// dev-сервера vite задайте VITE_GRAFANA_URL=http://127.0.0.1:3001 (frontend/.env.example)
+export const GRAFANA_URL = (import.meta.env.VITE_GRAFANA_URL ?? '/grafana').replace(/\/$/, '')
 // Полный переход браузера (не XHR) — backend/app/routers/oidc.py редиректит на Authentik
 export const OIDC_LOGIN_URL = `${API_BASE_URL}/auth/oidc/login`
 

@@ -4,8 +4,15 @@
 
 ## Адреса
 
-- **Grafana**: <http://localhost:3001> — логин `admin`, пароль из
+- **Локально**: <http://localhost:3001> — логин `admin`, пароль из
   `GF_SECURITY_ADMIN_PASSWORD` в `backend/.env`.
+- **На сервере**: `https://<домен>/grafana/` — nginx проксирует подпуть на сервис
+  `grafana` (frontend/nginx.conf), порты 3001/9090 наружу не публикуются
+  (только 127.0.0.1). Для этого в `backend/.env` на сервере должны быть
+  `GF_SERVER_ROOT_URL=https://<домен>/grafana/` и `GF_SERVER_SERVE_FROM_SUB_PATH=true`
+  (см. backend/.env.example). Снаружи подпуть закрыт сессией панели: nginx
+  проверяет cookie через `GET /api/v1/auth/me` (auth_request), поэтому
+  анонимный Viewer Grafana работает только для залогиненных в панель.
 - **Prometheus**: только `127.0.0.1:9090` (не публикуется в сеть) — для
   локальной отладки PromQL-запросов через UI (`/graph`) или `/targets`
   (проверить, что бэкенд в статусе UP).
