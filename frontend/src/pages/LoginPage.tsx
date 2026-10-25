@@ -11,6 +11,7 @@ import { AuthLayout } from '../components/AuthLayout'
 const OIDC_ERROR_MESSAGES: Record<string, string> = {
   oidc_failed: 'Не удалось войти через Authentik. Попробуйте ещё раз.',
   oidc_no_account: 'Для этого аккаунта нет доступа в панели — обратитесь к администратору.',
+  oidc_unavailable: 'Authentik сейчас недоступен. Попробуйте через минуту или войдите по логину и паролю.',
 }
 
 export function LoginPage() {

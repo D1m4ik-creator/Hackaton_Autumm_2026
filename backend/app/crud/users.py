@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from contextlib import asynccontextmanager
 
@@ -14,6 +15,8 @@ from app.dao.user import UsersDAO
 from app.db.models.users import User
 from app.db.schemas.auth import CurrentUser
 from app.db.schemas.users import UserCreate, UserUpdate
+
+logger = logging.getLogger(__name__)
 
 
 def _conflict(detail: str) -> HTTPException:
@@ -39,9 +42,11 @@ async def _authentik_errors():
     try:
         yield
     except authentik_api.AuthentikSyncError as exc:
+        logger.warning("Синхронизация с Authentik не удалась: %s", exc)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Не удалось синхронизировать пользователя с Authentik, попробуйте позже",
+            # Чаще всего Authentik ещё стартует (после docker compose up это ~2 минуты)
+            detail="Authentik недоступен или ещё запускается — изменения не сохранены. Повторите через минуту",
         ) from exc
 
 
