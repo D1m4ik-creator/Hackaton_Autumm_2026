@@ -1,11 +1,13 @@
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query
 
 import app.crud.auth as crud_auth
 import app.crud.model_settings as crud_model_settings
 from app.core.engine import SessionDep
 from app.core.openapi import error_responses
+from app.db.schemas.audit import AuditLogPage
+from app.db.schemas.auth import CurrentUser
 from app.db.schemas.model_settings import ModelSettingsOut, ModelSettingsPatchOut
 
 router = APIRouter(
@@ -62,14 +64,16 @@ async def get_settings(db: SessionDep) -> ModelSettingsOut:
     responses=error_responses(403, 503),
     openapi_extra=_PATCH_BODY,
 )
-async def patch_settings(db: SessionDep, body: Any = Body(...)) -> ModelSettingsPatchOut:
+async def patch_settings(
+    db: SessionDep, current_user: Annotated[CurrentUser, Depends(crud_auth.require_admin)], body: Any = Body(...)
+) -> ModelSettingsPatchOut:
     """Частичное обновление настроек модели с пересчётом (только администратор).
 
     Тело — произвольный JSON-объект с изменяемыми ключами: ``asOf`` (дата оценки),
     ``weights`` (веса признаков), ``bias``, ``threshold``, ``thresholds`` (пороги
     уровней), ``expiresSoonDays``, ``horizonDays``. Неизвестные ключи сохраняются.
     """
-    return await crud_model_settings.patch_settings(db, body)
+    return await crud_model_settings.patch_settings(db, body, current_user)
 
 
 @router.delete(
@@ -78,6 +82,23 @@ async def patch_settings(db: SessionDep, body: Any = Body(...)) -> ModelSettings
     dependencies=[Depends(crud_auth.require_admin)],
     responses=error_responses(403, 404, 503),
 )
-async def delete_setting(db: SessionDep, section: str, key: str) -> ModelSettingsPatchOut:
+async def delete_setting(
+    db: SessionDep, section: str, key: str, current_user: Annotated[CurrentUser, Depends(crud_auth.require_admin)]
+) -> ModelSettingsPatchOut:
     """Удалить пункт настроек (например, признак модели: weights/имя) и пересчитать (только администратор)"""
-    return await crud_model_settings.delete_setting(db, section, key)
+    return await crud_model_settings.delete_setting(db, section, key, current_user)
+
+
+@router.get(
+    "/settings/audit",
+    response_model=AuditLogPage,
+    dependencies=[Depends(crud_auth.require_admin)],
+    responses=error_responses(403),
+)
+async def get_settings_audit(
+    db: SessionDep,
+    page: Annotated[int, Query(ge=1, le=1_000_000)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200, alias="pageSize")] = 50,
+) -> AuditLogPage:
+    """История изменений настроек модели: кто/когда/что было -> что стало (только администратор)"""
+    return await crud_model_settings.get_audit(db, page, page_size)

@@ -15,7 +15,20 @@ from app.core.engine import SessionLocal, close_engine
 from app.core.limiter import limiter
 from app.core.oidc_client import register_oidc_client
 from app.crud.recalc import AnalysisContractError
-from app.routers import analytics, auth, customers, events, health, metrics, model_settings, oidc, source, users
+from app.routers import (
+    analytics,
+    auth,
+    customers,
+    events,
+    health,
+    metrics,
+    model_settings,
+    oidc,
+    public_report,
+    share_links,
+    source,
+    users,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -170,3 +183,5 @@ app.include_router(source.router, prefix=API_PREFIX)
 app.include_router(events.router, prefix=API_PREFIX)
 app.include_router(users.router, prefix=API_PREFIX)
 app.include_router(oidc.router, prefix=API_PREFIX)
+app.include_router(share_links.router, prefix=API_PREFIX)
+app.include_router(public_report.router, prefix=API_PREFIX)

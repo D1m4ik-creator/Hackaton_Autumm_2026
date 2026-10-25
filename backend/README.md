@@ -144,9 +144,12 @@ docker compose up -d authentik-db authentik-redis authentik-server authentik-wor
 | `GET /api/v1/model/settings` | эффективные настройки модели + дефолты |
 | `PATCH /api/v1/model/settings` | частично поменять настройки (deep-merge) и пересчитать; суперадмин и админ |
 | `DELETE /api/v1/model/settings/{section}/{key}` | удалить пункт настроек, например признак модели `weights/имя`, и пересчитать; 404 если пункта нет; суперадмин и админ |
-| `PUT /api/v1/source/snapshot` | загрузить свой снимок и пересчитать; суперадмин и админ |
+| `GET /api/v1/model/settings/audit` | история изменений настроек: кто/когда/что было → что стало, с пагинацией; суперадмин и админ |
+| `PUT /api/v1/source/snapshot` | загрузить свой снимок и пересчитать; `?mode=replace` (по умолчанию, полная замена) или `?mode=merge` (добавить к существующим, при пересечении id/email — 422); суперадмин и админ |
 | `GET /api/v1/events` | живое обновление (SSE) |
 | `GET`/`POST /api/v1/users`, `PATCH`/`DELETE /api/v1/users/{userId}` | пользователи: список, создание (логин, почта, пароль; `role: admin` только суперадмин), изменение, удаление; суперадмин и админы, админ работает только с менеджерами |
+| `POST`/`GET /api/v1/share-links`, `DELETE /api/v1/share-links/{linkId}` | публичные read-only ссылки на отчёт: создать (токен отдаётся один раз), список, отозвать; суперадмин и админ |
+| `GET /api/v1/public/report/summary`, `/customers`, `/customers/{customerId}` | публичный read-only отчёт по токену ссылки (`?token=...`), без входа и без email клиентов |
 | `GET /api/v1/health` | проверка живости API и базы (без входа) |
 | `GET /metrics` | метрики Prometheus (без входа) |
 
@@ -167,6 +170,30 @@ docker compose up -d authentik-db authentik-redis authentik-server authentik-wor
 через `PATCH /api/v1/model/settings` без правки кода. Признаки, формула score
 и порогов, формула потерь и таблица настроек — в
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Аудит изменений настроек
+
+Каждый `PATCH /model/settings` и `DELETE /model/settings/{section}/{key}`
+пишет запись в `model_settings_audit` (в той же транзакции, что и само
+изменение): кто (логин и роль — снимок на момент действия, не только FK:
+суперадмин живёт в `.env` и не имеет строки в `users`, а менеджера можно
+удалить насовсем), когда, что было (`before`) и что стало (`after`) в
+полных эффективных настройках. Смотреть — `GET /model/settings/audit`
+(пагинация `page`/`pageSize`) или на фронте: «История изменений» в сайдбаре
+(только админ/суперадмин).
+
+## Публичная ссылка на отчёт
+
+Админ создаёт ссылку (`POST /share-links`, поля `label` и `expiresInDays`
+1-90, по умолчанию 7) — токен показывается один раз, в БД хранится только
+его sha256-хэш (как и refresh-токены сессий). Ссылка вида
+`<фронт>/report/<токен>` открывается без входа в панель и показывает
+read-only версию списка клиентов и сводки — **без email** (единственное
+PII-поле в обычном `/customers`). Отозвать — `DELETE /share-links/{linkId}`
+(не удаляет запись, просто помечает `revoked_at`, история, что ссылка была,
+остаётся). Публичные ручки (`/public/report/*`) лимитированы по IP отдельно
+от остального API (`RATE_LIMIT_PUBLIC_REPORT`, по умолчанию `30/minute`) —
+единственные ручки, доступные вообще без логина.
 
 ## Лимиты и устойчивость
 

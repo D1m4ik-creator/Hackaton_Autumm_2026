@@ -7,6 +7,8 @@ from .transaction import Transaction
 from .model_settings import ModelSettings
 from .risk_result import RiskResult
 from .risk_summary import RiskSummary
+from .audit import AuditLog
+from .share_link import ShareLink
 
 # Новые модели импортировать сюда, чтобы Alembic их видел
 
@@ -20,4 +22,6 @@ __all__ = [
     "ModelSettings",
     "RiskResult",
     "RiskSummary",
+    "AuditLog",
+    "ShareLink",
 ]
