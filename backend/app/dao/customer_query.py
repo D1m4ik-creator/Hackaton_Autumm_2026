@@ -74,6 +74,27 @@ async def export_customers(
     return result.all()
 
 
+async def export_customer_sources(
+    session: AsyncSession, *, levels: Sequence[str] | None, search: str | None
+) -> tuple[Sequence[Service], Sequence[Transaction]]:
+    """Исходные данные только тех клиентов, которые попали в выгрузку."""
+    account_ids = (
+        select(Account.id)
+        .outerjoin(RiskResult, RiskResult.account_id == Account.id)
+        .where(*_conditions(levels, search))
+    )
+    services = await session.scalars(
+        select(Service).where(Service.owner_id.in_(account_ids)).order_by(Service.id)
+    )
+    transactions = await session.scalars(
+        select(Transaction)
+        .join(Service, Service.id == Transaction.service_id)
+        .where(Service.owner_id.in_(account_ids))
+        .order_by(Transaction.id)
+    )
+    return services.all(), transactions.all()
+
+
 def _list_stmt(levels: Sequence[str] | None, search: str | None, sort: str, order: str):
     """Общий SELECT списка и выгрузки: те же колонки, фильтр и порядок"""
     sort_col = SORT_COLUMNS.get(sort, RiskResult.score)
