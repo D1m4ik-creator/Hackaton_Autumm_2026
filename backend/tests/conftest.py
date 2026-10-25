@@ -28,6 +28,11 @@ os.environ.setdefault("ADMIN_LOGIN", "admin")
 os.environ.setdefault("ADMIN_PASSWORD", "test_password")
 # Лимиты на вход мешают тестам, где логинятся много раз; их проверяет отдельный тест
 os.environ.setdefault("RATE_LIMIT_ENABLED", "false")
+# Тесты не ходят во внешний Authentik, даже если он настроен в backend/.env;
+# синхронизацию проверяет test_authentik_sync.py на поддельном API
+os.environ["OIDC_ENABLED"] = "false"
+os.environ["AUTHENTIK_API_URL"] = ""
+os.environ["AUTHENTIK_API_TOKEN"] = ""
 
 import asyncpg  # noqa: E402
 import pytest  # noqa: E402

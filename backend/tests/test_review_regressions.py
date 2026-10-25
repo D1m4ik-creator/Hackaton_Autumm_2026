@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import update
@@ -136,6 +137,20 @@ async def test_oidc_links_only_verified_email(admin: AsyncClient, monkeypatch, e
         assert response.status_code == 302
         assert ("error=oidc_no_account" in response.headers["location"]) is not linked
         assert (ACCESS_COOKIE in response.cookies) is linked
+
+
+class _UnavailableOidcClient:
+    async def authorize_redirect(self, request, redirect_uri):
+        raise httpx.HTTPStatusError("404", request=httpx.Request("GET", "http://authentik"), response=httpx.Response(404))
+
+
+async def test_oidc_login_redirects_when_authentik_unavailable(client: AsyncClient, monkeypatch):
+    """Authentik не настроен или ещё стартует: не 500, а возврат на экран входа с понятной ошибкой"""
+    monkeypatch.setattr(get_settings(), "oidc_enabled", True)
+    monkeypatch.setattr(oidc_router.oauth, "create_client", lambda name: _UnavailableOidcClient())
+    response = await client.get("/api/v1/auth/oidc/login", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["location"].endswith("/login?error=oidc_unavailable")
 
 
 # --- Лимит тела и CORS -----------------------------------------------------------

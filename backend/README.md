@@ -79,6 +79,21 @@ docker compose up -d authentik-db authentik-redis authentik-server authentik-wor
    `'profile'`. Без них в `id_token`/`userinfo` не будет `email`, и бэкенд не
    сможет сопоставить вход с локальным аккаунтом (отработает как
    `oidc_no_account`, даже если юзер с таким email есть).
+   **Важно про `email_verified`**: бэкенд связывает аккаунты только при
+   `email_verified: true`, а стандартный маппинг `'email'` в Authentik всегда
+   отдаёт `false`. Поэтому вместо него создать свой Scope Mapping
+   (Customization → Property Mappings → Scope Mapping, scope name `email`):
+
+   ```python
+   return {
+       "email": request.user.email,
+       "email_verified": True,
+   }
+   ```
+
+   и подключить его к Provider вместо `authentik default OAuth Mapping: OpenID 'email'`.
+   Это безопасно, пока пользователей в Authentik заводит администратор
+   (самостоятельная регистрация выключена — так по умолчанию).
 5. На странице Provider скопировать `Client ID`, `Client Secret` и ссылку
    `OpenID Configuration Issuer` в `backend/.env`:
 
@@ -96,9 +111,25 @@ docker compose up -d authentik-db authentik-redis authentik-server authentik-wor
 
 6. Пересоздать `api`, чтобы подхватить новые переменные:
    `docker compose up -d --build api`.
-7. В Authentik создать тестового пользователя с email, который совпадает с
-   email существующего admin/manager в панели — иначе вход вернёт
-   «для этого аккаунта нет доступа» (`oidc_no_account`).
+7. Включить синхронизацию пользователей: в Authentik создать API-токен админа
+   (Directory → Tokens and App passwords → Create, intent **API**) и прописать
+   в `backend/.env`:
+
+   ```env
+   AUTHENTIK_API_URL=http://authentik-server:9000
+   AUTHENTIK_API_TOKEN=...
+   ```
+
+   После этого каждый пользователь, созданный админом в панели, сразу появляется
+   в Authentik (папка `aeza-panel`) с тем же логином, почтой и паролем; смена
+   логина/почты/пароля и удаление тоже повторяются там. Если Authentik недоступен,
+   создание и изменение пользователя в панели отвечают `502` и ничего не меняют —
+   чтобы пароли не разошлись. Пользователи, созданные до включения синхронизации,
+   появятся в Authentik, когда админ задаст им пароль в панели.
+
+   Без синхронизации пользователя нужно завести в Authentik вручную с тем же
+   email, что в панели, — иначе вход вернёт «для этого аккаунта нет доступа»
+   (`oidc_no_account`).
 
 ## Ручки
 
