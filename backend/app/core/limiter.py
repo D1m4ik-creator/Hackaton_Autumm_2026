@@ -13,3 +13,7 @@ def login_limit() -> str:
 
 def refresh_limit() -> str:
     return get_settings().rate_limit_refresh
+
+
+def public_report_limit() -> str:
+    return get_settings().rate_limit_public_report
