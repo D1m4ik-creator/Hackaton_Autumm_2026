@@ -3,6 +3,7 @@
 .client-risk-filter.ant-btn:first-child { min-width: 72px; margin-right: 2px; }
 .client-risk-filter.ant-btn:hover { color: var(--dashboard-accent-bright) !important; border-color: var(--dashboard-accent-bright) !important; background: var(--dashboard-hover) !important; }
 .client-risk-filter--active.ant-btn, .client-risk-filter--active.ant-btn:hover { color: #111111 !important; background: var(--dashboard-accent-bright) !important; border-color: var(--dashboard-accent-bright) !important; font-weight: 600; }
+.client-risk-filter--priority.ant-btn { margin-left: 6px; border-style: dashed; }
 
 @media (max-width: 439px) {
   .client-risk-filters { gap: 8px; }
