@@ -45,6 +45,10 @@ services:
       - "443:443"
     volumes:
       - ./frontend/certs:/etc/nginx/certs:ro
+    # api должен существовать в сети до старта nginx (резолв имени при запросах)
+    depends_on:
+      - api
+    restart: unless-stopped
   # --- Authentik: отдельный OIDC-провайдер для входа в панель (backend/app/routers/oidc.py) ---
   # Своя БД и Redis, изолированные от основного Postgres — наружу не публикуются,
   # поэтому фиксированные учётные данные ниже не секрет (виден только внутри сети compose).
