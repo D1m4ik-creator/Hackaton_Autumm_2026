@@ -42,6 +42,8 @@ services:
       args:
         # Адрес API подставляется в сборку фронта на этапе build
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+        # Адрес Grafana для встроенного дашборда (frontend/src/pages/grafana)
+        VITE_GRAFANA_URL: ${VITE_GRAFANA_URL:-http://localhost:3001}
     ports:
       - "80:80"
     depends_on:
@@ -69,6 +71,15 @@ services:
       - ./backend/.env
     environment:
       GF_SECURITY_ADMIN_USER: admin
+      # Дашборд встроен в панель через iframe (frontend/src/pages/grafana) — на
+      # http://localhost (без HTTPS) кросс-портовые cookie всё равно не дойдут
+      # до iframe (SameSite), поэтому для встраивания используется анонимный
+      # Viewer вместо логина внутри фрейма; пароль из GF_SECURITY_ADMIN_PASSWORD
+      # по-прежнему нужен для прямого входа на localhost:3001 (редактирование).
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_NAME: "Main Org."
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
     volumes:
       - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro

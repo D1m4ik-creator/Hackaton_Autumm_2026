@@ -4,16 +4,28 @@
 
 ## Адреса
 
-- **Grafana**: http://localhost:3001 — логин `admin`, пароль из
-  `GRAFANA_ADMIN_PASSWORD` в `backend/.env`.
+- **Grafana**: <http://localhost:3001> — логин `admin`, пароль из
+  `GF_SECURITY_ADMIN_PASSWORD` в `backend/.env`.
 - **Prometheus**: только `127.0.0.1:9090` (не публикуется в сеть) — для
   локальной отладки PromQL-запросов через UI (`/graph`) или `/targets`
   (проверить, что бэкенд в статусе UP).
+
+## Встраивание в панель
+
+Дашборд «Churn Overview» также открывается прямо внутри панели — пункт
+«Графики (Grafana)» в сайдбаре (`frontend/src/pages/grafana`). Технически
+это iframe на `GF_SECURITY_ALLOW_EMBEDDING=true` + `kiosk`-режим (прячет
+собственные шапку/меню Grafana). Внутри фрейма работает анонимный доступ
+(`GF_AUTH_ANONYMOUS_*`, роль Viewer) — на `http://localhost` без HTTPS
+сессионная cookie Grafana не доходит до iframe на другом порту (SameSite),
+поэтому логин внутри фрейма не используется. Прямой вход на localhost:3001
+(редактирование дашбордов/алертов) по-прежнему требует пароль админа.
 
 ## Дашборд
 
 «Churn Overview» (папка по умолчанию) — провижинится автоматически из
 `ops/grafana/dashboards/churn-overview.json`:
+
 - Клиенты по уровню риска во времени.
 - Ожидаемые потери в евро во времени.
 - Свежесть данных (минут с последнего пересчёта).

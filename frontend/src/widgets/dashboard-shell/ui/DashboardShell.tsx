@@ -61,6 +61,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
       <NavLink to={clientsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Клиенты под риском</NavLink>
       <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>
       <NavLink to="/app/churn-trend" className={navClassName} onClick={() => setMenuOpen(false)}>График оттока</NavLink>
+      <NavLink to="/app/grafana" className={navClassName} onClick={() => setMenuOpen(false)}>Графики (Grafana)</NavLink>
       {isAdmin && <NavLink to="/app/users" className={navClassName} onClick={() => setMenuOpen(false)}>{usersNavLabel}</NavLink>}
       {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setSnapshotOpen(true))}>Загрузить снимок</button>}
       <a className="dashboard-nav__item" href={METRICS_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>Метрики /metrics</a>
