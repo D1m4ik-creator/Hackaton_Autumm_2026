@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
 
 import app.crud.auth as crud_auth
 import app.crud.recalc as recalc
@@ -15,6 +17,14 @@ router = APIRouter(
 
 
 @router.put("/snapshot", response_model=SnapshotLoadResult, responses=error_responses(413, 503))
-async def put_snapshot(db: SessionDep, snapshot: SnapshotIn) -> SnapshotLoadResult:
-    """Полная замена исходных данных и пересчёт в одной транзакции"""
-    return await recalc.apply_snapshot(db, snapshot)
+async def put_snapshot(
+    db: SessionDep,
+    snapshot: SnapshotIn,
+    mode: Literal["replace", "merge"] = Query(
+        "replace",
+        description="replace — полная замена данных (по умолчанию); "
+        "merge — добавить к существующим, при пересечении id/email — 422, старые данные не трогаются",
+    ),
+) -> SnapshotLoadResult:
+    """Загрузка исходных данных и пересчёт в одной транзакции (замена или добавление)"""
+    return await recalc.apply_snapshot(db, snapshot, mode)

@@ -1,0 +1,59 @@
+{
+  "uid": "churn-overview",
+  "title": "Churn Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Клиенты по уровню риска",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "expr": "churn_customers", "legendFormat": "{{level}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Ожидаемые потери, €",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "currencyEUR", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "targets": [
+        { "expr": "churn_expected_loss_eurocents / 100", "legendFormat": "всего", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Свежесть данных, мин",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "m", "thresholds": { "mode": "absolute", "steps": [
+        { "color": "green", "value": null },
+        { "color": "orange", "value": 180 },
+        { "color": "red", "value": 360 }
+      ] } }, "overrides": [] },
+      "targets": [
+        { "expr": "(time() - churn_last_recalculation_timestamp_seconds) / 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Пересчётов всего",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "expr": "churn_recalculations_total", "refId": "A" }
+      ]
+    }
+  ]
+}

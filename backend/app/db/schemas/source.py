@@ -72,3 +72,6 @@ class SnapshotLoadResult(CamelModel):
     transactions: int
     version: int
     recalculated_at: UtcDateTime
+    # Применённый режим — "replace" (полная замена) или "merge" (добавление
+    # к существующим данным), эхо того, что было в запросе, для UI
+    mode: Literal["replace", "merge"] = "replace"
