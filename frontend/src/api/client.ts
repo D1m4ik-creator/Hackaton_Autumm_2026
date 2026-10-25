@@ -3,7 +3,10 @@ import type { AxiosError, AxiosRequestConfig, Method } from 'axios'
 import { message } from 'antd'
 import { formatApiError } from './error-message'
 
-const API_URL = (import.meta.env.VITE_API_URL ?? `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '')
+// Пусто (по умолчанию) — API на том же origin, что и страница: nginx
+// проксирует /api/ и /metrics на api (frontend/nginx.conf). Явный адрес
+// нужен только для dev-сервера vite, где фронт и бэк на разных портах.
+const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '')
 // Все роуты бэка, кроме /metrics, смонтированы под этим префиксом (backend/app/main.py)
 const API_PREFIX = '/api/v1'
 export const API_BASE_URL = `${API_URL}${API_PREFIX}`

@@ -7,7 +7,8 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_URL=http://localhost:8000
+# Пусто — same-origin (см. src/api/client.ts); адрес нужен только для внешнего API
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 
 RUN npm run build

@@ -1,3 +1,7 @@
 node_modules
 dist
 .git
+# VITE_API_URL для prod-сборки приходит только через build-arg (docker-compose.yaml);
+# локальный .env с dev-адресом не должен попадать в образ
+.env
+.env.*

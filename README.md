@@ -23,7 +23,7 @@ docker compose up -d --build
 
 ## Перед публикацией на сервере
 
-В `backend/.env` задайте свои значения: `JWT_SECRET_KEY` и `JWT_REFRESH_SECRET_KEY` (разные, от 32 символов; сгенерировать: `python -c "import secrets; print(secrets.token_hex(32))"`), `ADMIN_PASSWORD`, `POSTGRES_PASSWORD`. С `COOKIE_SECURE=true` приложение не стартует, пока в `.env` остаются значения из примера. Для работы по HTTPS поставьте `COOKIE_SECURE=true`, в `CORS_ORIGINS` укажите адрес фронта, а адрес API для фронта задайте через `VITE_API_URL` до сборки.
+В `backend/.env` задайте свои значения: `JWT_SECRET_KEY` и `JWT_REFRESH_SECRET_KEY` (разные, от 32 символов; сгенерировать: `python -c "import secrets; print(secrets.token_hex(32))"`), `ADMIN_PASSWORD`, `POSTGRES_PASSWORD`. С `COOKIE_SECURE=true` приложение не стартует, пока в `.env` остаются значения из примера. Для работы по HTTPS поставьте `COOKIE_SECURE=true`, в `CORS_ORIGINS` укажите адрес фронта. Адрес API фронту задавать не нужно: nginx отдаёт фронт и проксирует `/api/` на тот же origin, поэтому запросы не блокируются браузером как mixed content (`VITE_API_URL` нужен только для dev-сервера vite).
 
 ## Сброс данных
 
