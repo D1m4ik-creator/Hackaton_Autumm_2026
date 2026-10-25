@@ -1,12 +1,17 @@
-import { Alert, Button, Empty } from 'antd'
+import { Alert, Button, Empty, Segmented } from 'antd'
+import { useState } from 'react'
 import { getChurnTrend } from '../../../api/analytics'
 import { useApiResource } from '../../../api/useApiResource'
 import { formatInteger, formatShortDate } from '../../../shared/lib/format'
 import { DashboardShell } from '../../../widgets/dashboard-shell'
+import { ChurnTrendLineChart } from './ChurnTrendLineChart'
 import './churn-trend.css'
+
+type ChartView = 'bars' | 'line'
 
 export function ChurnTrendPage({ onSignOut }: { onSignOut?: () => Promise<void> }) {
   const { data, loading, error, reload } = useApiResource(getChurnTrend)
+  const [view, setView] = useState<ChartView>('bars')
   const buckets = data?.buckets ?? []
   const maxChurned = Math.max(1, ...buckets.map((b) => b.churnedServices))
   const forecastChurn = buckets.filter((b) => b.isForecast).reduce((sum, b) => sum + b.churnedServices, 0)
@@ -34,9 +39,18 @@ export function ChurnTrendPage({ onSignOut }: { onSignOut?: () => Promise<void> 
       </section>
 
       <section className="churn-chart-card" aria-label="График оттока по неделям">
+        <div className="churn-chart-card__header">
+          <Segmented<ChartView>
+            value={view}
+            onChange={setView}
+            options={[{ label: 'Столбцы', value: 'bars' }, { label: 'Линия', value: 'line' }]}
+            aria-label="Формат графика оттока"
+          />
+        </div>
         {!loading && buckets.length === 0
           ? <Empty description="Нет данных за выбранный период" />
-          : <>
+          : view === 'bars'
+          ? <>
             <div className="churn-chart__bars" role="img" aria-label="Столбчатая диаграмма оттока по неделям: факт и прогноз">
               {buckets.map((bucket) => {
                 const height = Math.round((bucket.churnedServices / maxChurned) * 100)
@@ -57,7 +71,8 @@ export function ChurnTrendPage({ onSignOut }: { onSignOut?: () => Promise<void> 
               <span className="churn-chart__legend-item"><span className="churn-chart__swatch churn-chart__swatch--fact" />Факт</span>
               <span className="churn-chart__legend-item"><span className="churn-chart__swatch churn-chart__swatch--forecast" />Прогноз</span>
             </div>
-          </>}
+          </>
+          : <ChurnTrendLineChart buckets={buckets} />}
       </section>
     </DashboardShell>
   )

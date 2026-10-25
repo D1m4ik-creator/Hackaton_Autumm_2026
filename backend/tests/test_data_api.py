@@ -35,6 +35,7 @@ async def test_put_snapshot_loads_and_recalculates(admin: AsyncClient):
     assert response.status_code == 200
     body = response.json()
     assert (body["accounts"], body["services"], body["transactions"]) == (10, 30, 100)
+    assert body["mode"] == "replace"
 
     summary = (await admin.get("/api/v1/analytics/summary")).json()
     assert summary["customersTotal"] == 10
@@ -67,6 +68,83 @@ async def test_invalid_snapshots_do_not_touch_data(loaded: AsyncClient):
     too_big["accounts"][0]["balance"] = 2**63
     for bad in (broken_owner, duplicate_id, too_big):
         assert (await loaded.put("/api/v1/source/snapshot", json=bad)).status_code == 422
+    assert (await loaded.get("/api/v1/customers")).json()["total"] == 10
+
+
+def _merge_snapshot(*, account_id: int, service_owner_id: int, tx_service_id: int) -> dict:
+    """Маленький снимок для merge-тестов: один аккаунт, одна услуга, одна транзакция.
+
+    service_owner_id/tx_service_id параметризуются отдельно, чтобы тестировать
+    и ссылки внутри этого же снимка, и ссылки на уже существующие в БД записи.
+    """
+    return {
+        "accounts": [{
+            "id": account_id, "email": f"merge-{account_id}@example.test", "balance": 1000,
+            "withdrawBalance": 0, "totalReplenished": 0, "bonusBalance": 0, "bonusState": "locked",
+        }],
+        "services": [{
+            "id": account_id, "name": f"merge-service-{account_id}", "ownerId": service_owner_id,
+            "paymentTerm": "month", "autoProlong": True,
+            "createdAt": "2026-10-19T14:30:00.000Z", "expiresAt": "2026-10-19T15:30:00.000Z",
+            "status": "active", "price": 100,
+        }],
+        "transactions": [{
+            "id": account_id, "amount": 0, "status": "performed",
+            "performedAt": "2026-10-19T14:32:00.000Z", "createdAt": "2026-10-19T14:32:00.000Z",
+            "type": "order", "serviceId": tx_service_id,
+        }],
+    }
+
+
+async def test_snapshot_merge_adds_to_existing_data(loaded: AsyncClient):
+    extra = _merge_snapshot(account_id=101, service_owner_id=101, tx_service_id=101)
+    response = await loaded.put("/api/v1/source/snapshot?mode=merge", json=extra)
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["accounts"], body["services"], body["transactions"]) == (1, 1, 1)
+    assert body["mode"] == "merge"
+
+    customers = (await loaded.get("/api/v1/customers")).json()
+    assert customers["total"] == 11
+    assert any(c["id"] == 101 for c in customers["items"])
+    # Старые клиенты не тронуты
+    assert any(c["id"] == 1 for c in customers["items"])
+
+
+async def test_snapshot_merge_service_can_reference_existing_account(loaded: AsyncClient):
+    """ownerId услуги указывает на аккаунт id=1 — существующий в БД, не в этом снимке."""
+    extra = _merge_snapshot(account_id=102, service_owner_id=1, tx_service_id=102)
+    extra["accounts"] = []  # только услуга + транзакция, без нового аккаунта
+    response = await loaded.put("/api/v1/source/snapshot?mode=merge", json=extra)
+    assert response.status_code == 200
+    assert response.json()["services"] == 1
+
+    card = (await loaded.get("/api/v1/customers/1")).json()
+    assert any(s["id"] == 102 for s in card["services"])
+
+
+async def test_snapshot_merge_rejects_id_collision_with_existing_data(loaded: AsyncClient):
+    # Аккаунт id=1 уже есть в базе (из fixture loaded)
+    colliding = _merge_snapshot(account_id=1, service_owner_id=1, tx_service_id=1)
+    response = await loaded.put("/api/v1/source/snapshot?mode=merge", json=colliding)
+    assert response.status_code == 422
+    # Старые данные не тронуты
+    assert (await loaded.get("/api/v1/customers")).json()["total"] == 10
+
+
+async def test_snapshot_merge_rejects_unknown_reference(loaded: AsyncClient):
+    extra = _merge_snapshot(account_id=103, service_owner_id=999999, tx_service_id=103)
+    response = await loaded.put("/api/v1/source/snapshot?mode=merge", json=extra)
+    assert response.status_code == 422
+    assert (await loaded.get("/api/v1/customers")).json()["total"] == 10
+
+
+async def test_snapshot_replace_mode_explicit_matches_default(loaded: AsyncClient):
+    response = await loaded.put("/api/v1/source/snapshot?mode=replace", json=SNAPSHOT)
+    assert response.status_code == 200
+    body = response.json()
+    assert (body["accounts"], body["services"], body["transactions"]) == (10, 30, 100)
+    assert body["mode"] == "replace"
     assert (await loaded.get("/api/v1/customers")).json()["total"] == 10
 
 

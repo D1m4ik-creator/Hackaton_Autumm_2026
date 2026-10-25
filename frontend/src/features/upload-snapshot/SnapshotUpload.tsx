@@ -1,8 +1,10 @@
-import { Alert, App, Button, Modal, Upload } from 'antd'
+import { Alert, App, Button, Modal, Segmented, Upload } from 'antd'
 import { useRef, useState } from 'react'
 import { request } from '../../api/client'
 import { useEventsStore } from '../../api/events'
 import { formatDateTime } from '../../shared/lib/format'
+
+type SnapshotMode = 'replace' | 'merge'
 
 interface SnapshotResult {
   accounts: number
@@ -10,10 +12,25 @@ interface SnapshotResult {
   transactions: number
   version: number
   recalculatedAt: string
+  mode: SnapshotMode
+}
+
+const MODE_COPY: Record<SnapshotMode, { warning: string; okText: string; resultLabel: string }> = {
+  replace: {
+    warning: 'Снимок полностью заменит текущие аккаунты, услуги и транзакции. После загрузки оценки будут пересчитаны.',
+    okText: 'Заменить данные',
+    resultLabel: 'Режим: замена',
+  },
+  merge: {
+    warning: 'Новые записи добавятся к существующим данным. Если какой-то ID или email уже есть — весь снимок будет отклонён, старые данные не тронутся.',
+    okText: 'Добавить данные',
+    resultLabel: 'Режим: добавление',
+  },
 }
 
 export function SnapshotUpload({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { message } = App.useApp()
+  const [mode, setMode] = useState<SnapshotMode>('replace')
   const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null)
   const [fileName, setFileName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -33,16 +50,17 @@ export function SnapshotUpload({ open, onClose }: { open: boolean; onClose: () =
     setLoading(true)
     setError(null)
     try {
-      const loaded = await request<SnapshotResult>('/source/snapshot', { method: 'PUT', data: snapshot })
+      const loaded = await request<SnapshotResult>('/source/snapshot', { method: 'PUT', data: snapshot, params: { mode } })
       setResult(loaded)
       useEventsStore.getState().invalidate()
-      message.success('Снимок загружен, оценки пересчитаны')
+      message.success(mode === 'merge' ? 'Снимок добавлен, оценки пересчитаны' : 'Снимок загружен, оценки пересчитаны')
     } catch (error) { setError(error instanceof Error ? error.message : 'Не удалось загрузить снимок') }
     finally { setLoading(false) }
   }
 
-  return <Modal title="Загрузка снимка" open={open} onCancel={close} onOk={() => result ? close() : void upload()} okText={result ? 'Готово' : 'Заменить данные'} cancelText="Закрыть" okButtonProps={{ disabled: !result && (!snapshot || reading) }} confirmLoading={loading} afterClose={() => { setSnapshot(null); setFileName(''); setError(null); setResult(null); setReading(false) }}>
-    <p>Снимок полностью заменит текущие аккаунты, услуги и транзакции. После загрузки оценки будут пересчитаны.</p>
+  return <Modal title="Загрузка снимка" open={open} onCancel={close} onOk={() => result ? close() : void upload()} okText={result ? 'Готово' : MODE_COPY[mode].okText} cancelText="Закрыть" okButtonProps={{ disabled: !result && (!snapshot || reading) }} confirmLoading={loading} afterClose={() => { setMode('replace'); setSnapshot(null); setFileName(''); setError(null); setResult(null); setReading(false) }}>
+    {!result && <Segmented<SnapshotMode> style={{ marginBottom: 12 }} value={mode} onChange={setMode} disabled={loading} options={[{ label: 'Заменить', value: 'replace' }, { label: 'Добавить', value: 'merge' }]} aria-label="Режим загрузки снимка" />}
+    <p>{result ? MODE_COPY[result.mode].warning : MODE_COPY[mode].warning}</p>
     <Upload accept=".json,application/json" showUploadList={false} disabled={loading} beforeUpload={async (file) => {
       const current = ++selection.current
       setReading(true)
@@ -67,6 +85,7 @@ export function SnapshotUpload({ open, onClose }: { open: boolean; onClose: () =
     }}><Button loading={reading}>Выбрать JSON-файл</Button></Upload>
     {fileName && <p>{fileName}</p>}
     {result && <Alert type="success" showIcon title="Снимок загружен" description={<div>
+      <p>{MODE_COPY[result.mode].resultLabel}</p>
       <p>Аккаунтов: {result.accounts}</p>
       <p>Услуг: {result.services}</p>
       <p>Транзакций: {result.transactions}</p>

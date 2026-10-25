@@ -27,7 +27,9 @@ from app.analysis.types import (
 )
 from app.core.config import get_settings
 from app.crud.source import (
+    ensure_merge_valid,
     ensure_snapshot_valid,
+    merge_source_data,
     read_snapshot_file,
     replace_source_data,
 )
@@ -333,11 +335,23 @@ async def recalculate(session: AsyncSession, reason: str) -> RiskSummary:
     )
 
 
-async def apply_snapshot(session: AsyncSession, snapshot: SnapshotIn) -> SnapshotLoadResult:
-    """Замена снимка и пересчёт одной транзакцией под блокировкой (§6.2)"""
-    ensure_snapshot_valid(snapshot)
+async def apply_snapshot(
+    session: AsyncSession, snapshot: SnapshotIn, mode: str = "replace"
+) -> SnapshotLoadResult:
+    """Загрузка снимка и пересчёт одной транзакцией под блокировкой (§6.2).
+
+    mode="replace" (по умолчанию) — полная замена, как раньше. mode="merge" —
+    добавление к существующим данным; DB-aware проверки (ensure_merge_valid)
+    обязаны идти после acquire_lock — иначе два параллельных merge могли бы
+    оба пройти проверку по данным до коммита друг друга (race на дубликаты id).
+    """
+    ensure_snapshot_valid(snapshot, mode)
     await acquire_lock(session)
-    counts = await replace_source_data(session, snapshot)
+    if mode == "merge":
+        await ensure_merge_valid(session, snapshot)
+        counts = await merge_source_data(session, snapshot)
+    else:
+        counts = await replace_source_data(session, snapshot)
     summary = await recalculate(session, "snapshot")
     await session.commit()
     return SnapshotLoadResult(
@@ -346,6 +360,7 @@ async def apply_snapshot(session: AsyncSession, snapshot: SnapshotIn) -> Snapsho
         transactions=counts.transactions,
         version=summary.version,
         recalculated_at=summary.recalculated_at,
+        mode=mode,
     )
 
 
