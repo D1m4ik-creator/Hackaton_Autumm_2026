@@ -1,3 +1,4 @@
+import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -6,14 +7,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import app.analysis as analysis
 import app.crud.recalc as recalc
+from app.dao.audit_log import AuditLogDAO
 from app.dao.model_settings import ModelSettingsDAO
+from app.db.models.audit import AuditLog
 from app.db.models.model_settings import ModelSettings
+from app.db.schemas.audit import AuditLogEntryOut, AuditLogPage
+from app.db.schemas.auth import CurrentUser
 from app.db.schemas.model_settings import ModelSettingsOut, ModelSettingsPatchOut
+
+
+def _safe_uuid(value: str | None) -> uuid.UUID | None:
+    """uid из CurrentUser -> UUID или None (суперадмин: uid='superadmin', не UUID)"""
+    try:
+        return uuid.UUID(value) if value else None
+    except ValueError:
+        return None
 
 
 def _invalid_body(msg: str) -> HTTPException:
     """422 в формате FastAPI с текстом ошибки модели"""
     return HTTPException(status_code=422, detail=[{"loc": ["body"], "msg": msg, "type": "value_error"}])
+
+
+async def get_audit(session: AsyncSession, page: int, page_size: int) -> AuditLogPage:
+    """Страница истории изменений настроек (GET /model/settings/audit)"""
+    rows = await AuditLogDAO.list_page(session, page=page, page_size=page_size)
+    total = await AuditLogDAO.count(session)
+    return AuditLogPage(
+        items=[
+            AuditLogEntryOut(
+                id=row.id, actor_login=row.actor_login, actor_role=row.actor_role,
+                action=row.action, section=row.section, before=row.before, after=row.after,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ],
+        total=total, page=page, page_size=page_size,
+    )
 
 
 async def get_view(session: AsyncSession) -> ModelSettingsOut:
@@ -26,7 +56,7 @@ async def get_view(session: AsyncSession) -> ModelSettingsOut:
     )
 
 
-async def patch_settings(session: AsyncSession, body: Any) -> ModelSettingsPatchOut:
+async def patch_settings(session: AsyncSession, body: Any, actor: CurrentUser) -> ModelSettingsPatchOut:
     """Частичное обновление настроек с пересчётом; всё под advisory-lock в одной транзакции"""
     if not isinstance(body, dict):
         raise _invalid_body("Тело запроса должно быть JSON-объектом")
@@ -34,7 +64,8 @@ async def patch_settings(session: AsyncSession, body: Any) -> ModelSettingsPatch
     # Слияние и валидация — после взятия блокировки (два PATCH не теряют друг друга)
     await recalc.acquire_lock(session)
     _, removed = recalc.split_stored(await ModelSettingsDAO.get(session))
-    merged = recalc.deep_merge(await recalc.effective_settings(session), body)
+    before = await recalc.effective_settings(session)
+    merged = recalc.deep_merge(before, body)
     try:
         normalized = analysis.validate_settings(merged)
     except ValueError as exc:
@@ -42,7 +73,7 @@ async def patch_settings(session: AsyncSession, body: Any) -> ModelSettingsPatch
 
     # Пункт, который снова задан в теле запроса, перестаёт считаться удалённым
     still_removed = [p for p in removed if not _has_path(body, p)]
-    return await _save_and_recalculate(session, normalized, still_removed)
+    return await _save_and_recalculate(session, normalized, still_removed, actor=actor, action="patch", before=before)
 
 
 def _has_path(settings: dict, path: str) -> bool:
@@ -50,10 +81,26 @@ def _has_path(settings: dict, path: str) -> bool:
     return isinstance(settings.get(section), dict) and key in settings[section]
 
 
-async def _save_and_recalculate(session: AsyncSession, settings: dict, removed: list[str]) -> ModelSettingsPatchOut:
+async def _save_and_recalculate(
+    session: AsyncSession,
+    settings: dict,
+    removed: list[str],
+    *,
+    actor: CurrentUser,
+    action: str,
+    before: dict,
+    section: str | None = None,
+) -> ModelSettingsPatchOut:
     stored = {**settings, recalc.REMOVED_KEY: removed} if removed else settings
     await ModelSettingsDAO.save(session, stored)
     summary = await recalc.recalculate(session, "settings")
+
+    # В той же транзакции/advisory-lock, что и сохранение настроек — не через
+    # AuditLogDAO.add() (та коммитит сама и разорвала бы атомарность).
+    session.add(AuditLog(
+        actor_login=actor.login, actor_role=actor.role, user_id=_safe_uuid(actor.uid),
+        action=action, section=section, before=before, after=settings,
+    ))
 
     # Ответ собирается до commit, пока держим advisory-lock: иначе параллельный PATCH успеет
     # подменить настройки и ответ смешает чужие настройки с нашей version
@@ -69,7 +116,7 @@ async def _save_and_recalculate(session: AsyncSession, settings: dict, removed: 
     return out
 
 
-async def delete_setting(session: AsyncSession, section: str, key: str) -> ModelSettingsPatchOut:
+async def delete_setting(session: AsyncSession, section: str, key: str, actor: CurrentUser) -> ModelSettingsPatchOut:
     """Удаляет пункт настроек settings[section][key] (например, признак модели) и пересчитывает"""
     await recalc.acquire_lock(session)
     _, removed = recalc.split_stored(await ModelSettingsDAO.get(session))
@@ -89,4 +136,7 @@ async def delete_setting(session: AsyncSession, section: str, key: str) -> Model
         raise _invalid_body(str(exc))
 
     path = f"{section}.{key}"
-    return await _save_and_recalculate(session, normalized, removed if path in removed else [*removed, path])
+    return await _save_and_recalculate(
+        session, normalized, removed if path in removed else [*removed, path],
+        actor=actor, action="delete", before=current, section=path,
+    )

@@ -69,6 +69,10 @@ class Config(BaseSettings):
     rate_limit_enabled: bool = True
     rate_limit_login: str = "5/minute"
     rate_limit_refresh: str = "30/minute"
+    # Публичная read-only ссылка (app/routers/public_report.py) — единственные
+    # ручки, доступные вообще без логина, нужен отдельный лимит от перебора
+    # токенов/скрейпинга (остальные ручки за login_required лимита не имеют).
+    rate_limit_public_report: str = "30/minute"
 
     # Защита от подбора пароля по конкретному логину (в дополнение к лимиту по IP).
     # Отключается вместе с rate_limit_enabled.
@@ -93,7 +97,8 @@ class Config(BaseSettings):
     oidc_client_secret: SecretStr = SecretStr("")
     oidc_redirect_uri: str = ""
     # Куда редиректить обратно на фронт после входа/ошибки через OIDC
-    frontend_url: str = "http://localhost:3000"
+    # (docker-compose.yaml: web слушает 80:80, не 3000 — порт менялся)
+    frontend_url: str = "http://localhost"
     # Authentik отдаёт все адреса в .well-known-документе с тем же хостом,
     # с которым к нему обратились за метаданными — бэкенд внутри docker-сети
     # ходит на authentik-server, но браузер этот хост не резолвит. Эта
@@ -137,8 +142,9 @@ class Config(BaseSettings):
             raise ValueError("OIDC_ENABLED=true требует OIDC_ISSUER, OIDC_CLIENT_ID и OIDC_CLIENT_SECRET")
         return self
 
-    # Список origin'ов фронта через запятую
-    cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    # Список origin'ов фронта через запятую (localhost — docker-compose.yaml: web
+    # слушает 80:80; 3000/5173 — для локального запуска фронта вне docker)
+    cors_origins: str = "http://localhost,http://localhost:3000,http://localhost:5173"
 
     # Путь к файлу исходного снимка для первичной загрузки в пустую базу
     source_data_path: Path = ROOT_DIR.parent / "origin_data" / "data.json"

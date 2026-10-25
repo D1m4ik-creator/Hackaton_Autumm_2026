@@ -1,0 +1,78 @@
+{
+  "uid": "churn-overview",
+  "title": "Churn Overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Клиенты по уровню риска",
+      "type": "timeseries",
+      "transparent": true,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 12, "lineWidth": 2 } },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "high" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#ff7a00" } }] },
+          { "matcher": { "id": "byName", "options": "medium" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#ffb066" } }] },
+          { "matcher": { "id": "byName", "options": "low" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#9a9a9a" } }] },
+          { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "#5c5c5c" } }] }
+        ]
+      },
+      "targets": [
+        { "expr": "churn_customers", "legendFormat": "{{level}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Ожидаемые потери, €",
+      "type": "timeseries",
+      "transparent": true,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyEUR",
+          "color": { "mode": "fixed", "fixedColor": "#ff7a00" },
+          "custom": { "drawStyle": "line", "fillOpacity": 12, "lineWidth": 2 }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "expr": "churn_expected_loss_eurocents / 100", "legendFormat": "всего", "refId": "A" }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Свежесть данных, мин",
+      "type": "stat",
+      "transparent": true,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "m", "thresholds": { "mode": "absolute", "steps": [
+        { "color": "#9a9a9a", "value": null },
+        { "color": "#ff7a00", "value": 180 },
+        { "color": "#e0392b", "value": 360 }
+      ] } }, "overrides": [] },
+      "targets": [
+        { "expr": "(time() - churn_last_recalculation_timestamp_seconds) / 60", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Пересчётов всего",
+      "type": "stat",
+      "transparent": true,
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "fixed", "fixedColor": "#ff7a00" } }, "overrides": [] },
+      "targets": [
+        { "expr": "churn_recalculations_total", "refId": "A" }
+      ]
+    }
+  ]
+}

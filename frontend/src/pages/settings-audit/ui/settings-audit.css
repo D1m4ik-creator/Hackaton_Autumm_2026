@@ -1,0 +1,4 @@
+.settings-audit-heading { margin-bottom: 20px; }
+.settings-audit-heading h1 { font-size: 24px; font-weight: 700; line-height: 29px; letter-spacing: -0.45px; }
+.settings-audit-diff { margin: 0; padding-left: 16px; font-size: 12px; line-height: 1.6; }
+.settings-audit-diff li { word-break: break-word; }

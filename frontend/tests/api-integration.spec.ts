@@ -77,7 +77,9 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
     const url = new URL(req.url())
     const path = url.pathname.replace('/api/v1', '')
     const method = req.method()
-    const body = req.postData() ? req.postDataJSON() : null
+    const body = req.postData()
+      ? req.headers()['content-type']?.includes('application/json') ? req.postDataJSON() : req.postData()
+      : null
     state.requests.push({ path, method, body })
     const respond = (json: unknown, status = 200) => route.fulfill({
       status, contentType: 'application/json', body: status === 204 ? undefined : JSON.stringify(json),
@@ -145,11 +147,16 @@ async function setupApi(page: Page, role: 'admin' | 'manager' = 'admin', loggedI
       if (method === 'PATCH') { state.settings = mergeSettings(state.settings, body); state.version++; state.onSettingsSaved?.() }
       return respond({ settings: state.settings, defaults: { asOf: null }, updatedAt: timestamp, version: state.version })
     }
-    if (path === '/source/snapshot') {
+    if (path === '/source/snapshot' || path === '/source/snapshot/file') {
       if (state.snapshotError) return respond(state.snapshotError, 422)
       state.version++
-      return respond({ accounts: body.accounts.length, services: body.services.length, transactions: body.transactions.length, version: state.version, recalculatedAt: timestamp })
+      const snapshot = path.endsWith('/file') && url.searchParams.get('format') === 'json' ? JSON.parse(body) : body
+      const counts = path.endsWith('/file') && url.searchParams.get('format') !== 'json'
+        ? { accounts: 1, services: 2, transactions: 3 }
+        : { accounts: snapshot.accounts.length, services: snapshot.services.length, transactions: snapshot.transactions.length }
+      return respond({ ...counts, version: state.version, recalculatedAt: timestamp, mode: url.searchParams.get('mode') ?? 'replace' })
     }
+    if (path === '/share-links' && method === 'GET') return respond([])
     if (path === '/users' && method === 'GET') return respond(state.managers)
     if (path === '/users' && method === 'POST') {
       const created = { id: '22222222-2222-4222-8222-222222222222', login: body.login, email: body.email, role: 'manager', createdAt: timestamp }
@@ -593,17 +600,61 @@ test('administrator uploads a snapshot after choosing and confirming a JSON file
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeDisabled()
   const snapshot = { accounts: [{ id: 1, email: 'snapshot@example.com', balance: 100, withdrawBalance: 0, totalReplenished: 100, bonusBalance: 0, bonusState: 'unlocked' }], services: [], transactions: [] }
-  await dialog.locator('input[type=file]').setInputFiles({ name: 'snapshot.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(snapshot)) })
+  const content = JSON.stringify(snapshot).replace('"id":1', '"id":9223372036854775807')
+  await dialog.locator('input[type=file]').setInputFiles({ name: 'snapshot.json', mimeType: 'application/json', buffer: Buffer.from(content) })
   await expect(dialog.getByText('snapshot.json', { exact: true })).toBeVisible()
-  expect(api.requests.some((req) => req.path === '/source/snapshot')).toBe(false)
+  expect(api.requests.some((req) => req.path.startsWith('/source/snapshot'))).toBe(false)
   await dialog.getByRole('button', { name: 'Заменить данные' }).click()
   await expect(page.getByText('Снимок загружен, оценки пересчитаны')).toBeVisible()
   await expect(dialog.getByText('Аккаунтов: 1', { exact: true })).toBeVisible()
   await expect(dialog.getByText('Услуг: 0', { exact: true })).toBeVisible()
   await expect(dialog.getByText('Транзакций: 0', { exact: true })).toBeVisible()
-  expect(api.requests.find((req) => req.path === '/source/snapshot')).toMatchObject({ method: 'PUT', body: snapshot })
+  expect(api.requests.find((req) => req.path === '/source/snapshot/file')).toMatchObject({ method: 'PUT', body: content })
   await dialog.getByRole('button', { name: /Готово/ }).click()
   await expect(dialog).toHaveCount(0)
+})
+
+for (const format of ['csv', 'xlsx'] as const) {
+  test(`administrator confirms and sends a ${format} snapshot in merge mode`, async ({ page }) => {
+    const api = await setupApi(page)
+    await page.goto('/')
+    await page.getByRole('button', { name: 'Загрузить снимок', exact: true }).click()
+    const dialog = page.getByRole('dialog')
+    await dialog.getByText('Добавить', { exact: true }).click()
+    const content = format === 'csv' ? Buffer.from('snapshotAccount;snapshotServices;snapshotTransactions\n') : Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x00, 0xff])
+    await dialog.locator('input[type=file]').setInputFiles({
+      name: `snapshot.${format}`, buffer: content,
+      mimeType: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    await expect(dialog.getByText(`snapshot.${format}`, { exact: true })).toBeVisible()
+    expect(api.requests.some((req) => req.path.startsWith('/source/snapshot'))).toBe(false)
+    const sent = page.waitForRequest((req) => req.url().includes('/source/snapshot/file'))
+    await dialog.getByRole('button', { name: 'Добавить данные' }).click()
+    const upload = await sent
+    expect(upload.method()).toBe('PUT')
+    expect(new URL(upload.url()).searchParams.get('format')).toBe(format)
+    expect(new URL(upload.url()).searchParams.get('mode')).toBe('merge')
+    expect(upload.headers()['content-type']).toBe('application/octet-stream')
+    expect(upload.postDataBuffer()).toEqual(content)
+    await expect(dialog.getByText('Аккаунтов: 1', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Услуг: 2', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Транзакций: 3', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Режим: добавление', { exact: true })).toBeVisible()
+  })
+}
+
+test('unsupported snapshot resets a previously selected file', async ({ page }) => {
+  const api = await setupApi(page)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Загрузить снимок', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const picker = dialog.locator('input[type=file]')
+  await picker.setInputFiles({ name: 'snapshot.csv', mimeType: 'text/csv', buffer: Buffer.from('csv') })
+  await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeEnabled()
+  await picker.setInputFiles({ name: 'snapshot.pdf', mimeType: 'application/pdf', buffer: Buffer.from('pdf') })
+  await expect(dialog.getByRole('alert')).toContainText('Выберите JSON, Excel (.xlsx) или CSV-файл.')
+  await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeDisabled()
+  expect(api.requests.some((req) => req.path.startsWith('/source/snapshot'))).toBe(false)
 })
 
 test('expired SSE session returns to login and closes the stream', async ({ page }) => {
@@ -762,7 +813,7 @@ test('snapshot validation errors identify the record and field in Russian', asyn
   await picker.setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') })
   await expect(dialog.getByRole('alert')).toContainText('Проверьте формат файла')
   await expect(dialog.getByRole('button', { name: 'Заменить данные' })).toBeDisabled()
-  expect(api.requests.some((req) => req.path === '/source/snapshot')).toBe(false)
+  expect(api.requests.some((req) => req.path.startsWith('/source/snapshot'))).toBe(false)
   await picker.setInputFiles({ name: 'data.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ accounts: [{ balance: -1 }], services: [], transactions: [] })) })
   await dialog.getByRole('button', { name: 'Заменить данные' }).click()
   await expect(dialog.getByRole('alert')).toContainText('Аккаунты → запись 1 → Баланс')

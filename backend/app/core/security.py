@@ -43,6 +43,12 @@ def hash_token(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def generate_share_token() -> str:
+    """Случайный токен для публичной read-only ссылки (app/routers/public_report.py);
+    в БД хранится только его hash_token(), сам токен — только в ответе на создание"""
+    return secrets.token_urlsafe(32)
+
+
 def _create_token(data: dict, secret: str, expires_delta: timedelta, token_type: str) -> str:
     to_encode = data.copy()
     to_encode.update(

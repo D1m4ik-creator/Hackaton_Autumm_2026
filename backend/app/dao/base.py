@@ -77,6 +77,25 @@ class BaseDAO:
             await session.execute(insert(table), rows[start : start + chunk])
 
     @classmethod
+    async def matching_ids(cls, session: AsyncSession, ids: Sequence[int] | set[int]) -> set[int]:
+        """Пересечение переданных id с уже существующими в таблице (для merge-проверок снимка).
+
+        Точечный запрос, а не выгрузка всех id в память — на больших таблицах
+        (до 200k аккаунтов) это дешевле. Чанкуется тем же лимитом, что и
+        bulk_insert, чтобы не упереться в предел bind-параметров.
+        """
+        id_list = list(ids)
+        if not id_list:
+            return set()
+        table = cls.model.__table__
+        found: set[int] = set()
+        for start in range(0, len(id_list), MAX_BIND_PARAMS):
+            chunk = id_list[start : start + MAX_BIND_PARAMS]
+            result = await session.execute(select(table.c.id).where(table.c.id.in_(chunk)))
+            found.update(row[0] for row in result.all())
+        return found
+
+    @classmethod
     async def delete_all(cls, session: AsyncSession) -> None:
         """Удаляет все строки таблицы без commit"""
         await session.execute(delete(cls.model))

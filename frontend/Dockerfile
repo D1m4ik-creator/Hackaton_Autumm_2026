@@ -7,9 +7,9 @@ RUN npm ci
 
 COPY . .
 
-# Адрес API в образ не запекается: nginx проксирует /api/ и /metrics на тот же
-# origin (nginx.conf), фронт ходит на same-origin. VITE_API_URL используется
-# только dev-сервером vite и тестами, в образ он попасть не должен.
+ARG VITE_GRAFANA_URL=http://localhost:3001
+ENV VITE_GRAFANA_URL=$VITE_GRAFANA_URL
+
 RUN npm run build
 
 FROM nginx:alpine

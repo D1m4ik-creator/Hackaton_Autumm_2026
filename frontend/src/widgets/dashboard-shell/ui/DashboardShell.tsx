@@ -11,6 +11,7 @@ import { isAdminRole, isSuperadmin } from '../../../shared/lib/roles'
 import { AezaLogo } from '../../../shared/ui/aeza-logo/AezaLogo'
 import { useAuth } from '../../../context/AuthContext'
 import { SnapshotUpload } from '../../../features/upload-snapshot/SnapshotUpload'
+import { ShareReportModal } from '../../../features/share-report/ui/ShareReportModal'
 import './dashboard-shell.css'
 
 interface DashboardShellProps {
@@ -29,6 +30,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
   const usersNavLabel = isSuperadmin(user?.role) ? 'Управление пользователями' : 'Управление менеджерами'
   const [menuOpen, setMenuOpen] = useState(false)
   const [snapshotOpen, setSnapshotOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [isSigningOut, setIsSigningOut] = useState(false)
   const dashboardPath = resolveDashboardPath(pathname)
   const clientsPath = resolveClientsPath(pathname)
@@ -61,8 +63,11 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
       <NavLink to={clientsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Клиенты под риском</NavLink>
       <NavLink to={modelSettingsPath} className={navClassName} onClick={() => setMenuOpen(false)}>Настройка модели</NavLink>
       <NavLink to="/app/churn-trend" className={navClassName} onClick={() => setMenuOpen(false)}>График оттока</NavLink>
+      <NavLink to="/app/grafana" className={navClassName} onClick={() => setMenuOpen(false)}>Графики (Grafana)</NavLink>
       {isAdmin && <NavLink to="/app/users" className={navClassName} onClick={() => setMenuOpen(false)}>{usersNavLabel}</NavLink>}
+      {isAdmin && <NavLink to="/app/settings-audit" className={navClassName} onClick={() => setMenuOpen(false)}>История изменений</NavLink>}
       {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setSnapshotOpen(true))}>Загрузить снимок</button>}
+      {isAdmin && <button className="dashboard-nav__item" onClick={() => closeMenu(() => setShareOpen(true))}>Поделиться отчётом</button>}
       <a className="dashboard-nav__item" href={METRICS_URL} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>Метрики /metrics</a>
     </nav>
     <div className="dashboard-sidebar-footer">
@@ -94,6 +99,7 @@ export function DashboardShell({ children, onSignOut, className = '' }: Dashboar
         </AnimatePresence>
       </main>
       {isAdmin && <SnapshotUpload open={snapshotOpen} onClose={() => setSnapshotOpen(false)} />}
+      {isAdmin && <ShareReportModal open={shareOpen} onClose={() => setShareOpen(false)} />}
     </div>
   )
 }
