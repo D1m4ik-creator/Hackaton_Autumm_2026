@@ -7,10 +7,9 @@ RUN npm ci
 
 COPY . .
 
-# Пусто — same-origin (см. src/api/client.ts); адрес нужен только для внешнего API
-ARG VITE_API_URL=
-ENV VITE_API_URL=$VITE_API_URL
-
+# Адрес API в образ не запекается: nginx проксирует /api/ и /metrics на тот же
+# origin (nginx.conf), фронт ходит на same-origin. VITE_API_URL используется
+# только dev-сервером vite и тестами, в образ он попасть не должен.
 RUN npm run build
 
 FROM nginx:alpine

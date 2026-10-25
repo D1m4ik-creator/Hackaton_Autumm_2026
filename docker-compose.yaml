@@ -37,12 +37,9 @@ services:
     restart: unless-stopped
 
   web:
+    # Адрес API в образ не передаётся: фронт ходит на same-origin (см. frontend/Dockerfile)
     build:
       context: ./frontend
-      args:
-        # Пусто — фронт ходит на API на тот же origin (nginx проксирует /api/ на api);
-        # VITE_API_URL нужен только для сборки под внешний API
-        VITE_API_URL: "${VITE_API_URL:-}"
     ports:
       - "80:80"
       - "443:443"
